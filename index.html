@@ -186,6 +186,7 @@
       align-items: center;
       justify-content: center;
       text-align: center;
+      white-space: pre-wrap;
     }
     
     .delete-btn {
@@ -1560,11 +1561,90 @@
       if (typeof html2canvas === 'undefined') {
         return Promise.reject(new Error('html2canvas を読み込んでください'));
       }
-      return html2canvas(workspace, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false
+      
+      return new Promise((resolve, reject) => {
+        // フォントの読み込みを待つ
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => {
+            // アニメーション中のカードを最終位置に移動
+            const cards = workspaceBoard.querySelectorAll('.card');
+            cards.forEach(card => {
+              // アニメーションを停止して最終位置に設定
+              if (card.classList.contains('card-drop-in')) {
+                const finalTop = card.style.getPropertyValue('--final-top');
+                if (finalTop) {
+                  card.style.top = finalTop;
+                  card.classList.remove('card-drop-in');
+                }
+              }
+              // 選択状態のアニメーションも停止
+              if (card.classList.contains('selected')) {
+                card.style.animation = 'none';
+                card.style.transform = 'none';
+              }
+            });
+            
+            // 少し待ってからキャプチャ（DOM更新を待つ）
+            setTimeout(() => {
+              html2canvas(workspace, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: null,
+                removeContainer: false,
+                onclone: (clonedDoc) => {
+                  // クローンされたドキュメントでもアニメーションを停止
+                  const clonedCards = clonedDoc.querySelectorAll('.card');
+                  clonedCards.forEach(card => {
+                    card.style.animation = 'none';
+                    card.style.transform = 'none';
+                    const finalTop = card.style.getPropertyValue('--final-top');
+                    if (finalTop) {
+                      card.style.top = finalTop;
+                    }
+                    // カードコンテンツのスタイルを確実に適用
+                    const content = card.querySelector('.card-content');
+                    if (content) {
+                      // 改行を確実に表示するために、display: table-cellに変更
+                      // flexレイアウトでは改行が正しく表示されないため
+                      const text = content.textContent || content.innerText || '';
+                      
+                      // table-cellレイアウトを使用して中央配置と改行を両立
+                      card.style.display = 'table';
+                      content.style.display = 'table-cell';
+                      content.style.verticalAlign = 'middle';
+                      content.style.textAlign = 'center';
+                      content.style.whiteSpace = 'pre-wrap';
+                      content.style.wordBreak = 'break-word';
+                      content.style.overflow = 'hidden';
+                      content.style.width = '100%';
+                      content.style.height = '100%';
+                    }
+                  });
+                }
+              }).then(resolve).catch(reject);
+            }, 100);
+          }).catch(() => {
+            // フォント読み込みに失敗した場合も続行
+            html2canvas(workspace, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              logging: false,
+              backgroundColor: null
+            }).then(resolve).catch(reject);
+          });
+        } else {
+          // フォントAPIがサポートされていない場合
+          html2canvas(workspace, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: null
+          }).then(resolve).catch(reject);
+        }
       });
     }
     
@@ -1573,12 +1653,51 @@
     const screenshotPreviewImg = document.getElementById('screenshot-preview-img');
     
     document.getElementById('save-png-btn').addEventListener('click', () => {
+      // アニメーション状態を保存
+      const cardStates = [];
+      const cards = workspaceBoard.querySelectorAll('.card');
+      cards.forEach(card => {
+        cardStates.push({
+          element: card,
+          hasDropIn: card.classList.contains('card-drop-in'),
+          hasSelected: card.classList.contains('selected'),
+          animation: card.style.animation,
+          transform: card.style.transform
+        });
+      });
+      
       captureWorkspaceAsCanvas().then(canvas => {
+        // アニメーション状態を復元
+        cardStates.forEach(state => {
+          if (state.hasDropIn) {
+            state.element.classList.add('card-drop-in');
+          }
+          if (state.hasSelected) {
+            state.element.classList.add('selected');
+          }
+          state.element.style.animation = state.animation;
+          state.element.style.transform = state.transform;
+        });
+        
         screenshotPreviewCanvas = canvas;
         screenshotPreviewImg.src = canvas.toDataURL('image/png');
         screenshotModal.classList.add('open');
         screenshotModal.setAttribute('aria-hidden', 'false');
-      }).catch(() => alert('キャプチャに失敗しました'));
+      }).catch((error) => {
+        // エラー時もアニメーション状態を復元
+        cardStates.forEach(state => {
+          if (state.hasDropIn) {
+            state.element.classList.add('card-drop-in');
+          }
+          if (state.hasSelected) {
+            state.element.classList.add('selected');
+          }
+          state.element.style.animation = state.animation;
+          state.element.style.transform = state.transform;
+        });
+        console.error('キャプチャエラー:', error);
+        alert('キャプチャに失敗しました: ' + error.message);
+      });
     });
     
     // PowerPoint出力機能
