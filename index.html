@@ -187,6 +187,8 @@
       justify-content: center;
       text-align: center;
       white-space: pre-wrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     
     .delete-btn {
@@ -206,6 +208,8 @@
       opacity: 0;
       transition: opacity 0.2s;
       z-index: 2;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     
     .card.selected .delete-btn {
@@ -252,6 +256,8 @@
     }
     
     .card-control-btn {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       width: 28px;
       height: 24px;
       display: flex;
@@ -309,6 +315,8 @@
     }
     
     .color-option-card {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       width: 30px;
       height: 30px;
       border-radius: 6px;
@@ -330,6 +338,8 @@
     }
     
     .connection-line {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       position: absolute;
       height: 2px;
       padding: 6px 0;
@@ -375,6 +385,12 @@
       color: white;
       padding: 10px;
       border-radius: 8px 8px 0 0;
+    }
+    
+    .btn,
+    button {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     
     .btn {
@@ -662,6 +678,8 @@
     }
     /* パネル内の背景色ボタン：枠でパネル背景と区別し、選択時は強調 */
     .settings-panel-inner .color-option {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       border: 2px solid rgba(0, 0, 0, 0.28);
       box-sizing: border-box;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -692,6 +710,8 @@
     }
     
     .settings-tab {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       flex: 1;
       padding: 6px 10px;
       cursor: pointer;
@@ -777,6 +797,8 @@
     }
     
     .next-card-color-option {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       width: 20px;
       height: 20px;
       border-radius: 50%;
@@ -859,6 +881,8 @@
     
     /* シンキングツールの背景 */
     .template-option {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       width: 100px;
       height: 75px;
       border-radius: 8px;
@@ -1399,6 +1423,35 @@
   </div>
   
   <script>
+    // タッチ対応ヘルパー関数：クリックとタッチの両方を処理
+    function addClickOrTouchListener(element, handler, options = {}) {
+      if (!element) return;
+      
+      let touchHandled = false;
+      
+      // タッチイベントハンドラ
+      const touchHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        touchHandled = true;
+        handler(e);
+        // 短い遅延後にリセット（クリックイベントが発火する前に）
+        setTimeout(() => {
+          touchHandled = false;
+        }, 300);
+      };
+      
+      // クリックイベントハンドラ（タッチで処理済みの場合は無視）
+      const clickHandler = (e) => {
+        if (!touchHandled) {
+          handler(e);
+        }
+      };
+      
+      element.addEventListener('click', clickHandler, options);
+      element.addEventListener('touchend', touchHandler, { ...options, passive: false });
+    }
+    
     // パネル折りたたみ・位置
     const bottomPanel = document.getElementById('bottom-panel');
     const panelToggleBtn = document.getElementById('panel-toggle');
@@ -1431,7 +1484,7 @@
     const savedBottom = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_BOTTOM_KEY), 10); } catch (_) { return null; } })();
     applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedBottom === 'number' && !isNaN(savedBottom) ? savedBottom : 0);
     
-    panelToggleBtn.addEventListener('click', (e) => {
+    addClickOrTouchListener(panelToggleBtn, (e) => {
       e.stopPropagation();
       bottomPanel.classList.toggle('collapsed');
       panelToggleBtn.title = bottomPanel.classList.contains('collapsed') ? 'パネルを開く' : 'パネルを閉じる';
@@ -1519,7 +1572,7 @@
     const panels = document.querySelectorAll('.input-panel');
     
     tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
+      addClickOrTouchListener(tab, () => {
         const targetPanel = tab.dataset.tab;
         
         // タブの切り替え
@@ -1544,7 +1597,7 @@
     const settingsSubpanels = document.querySelectorAll('.settings-subpanel');
     
     settingsTabs.forEach(tab => {
-      tab.addEventListener('click', () => {
+      addClickOrTouchListener(tab, () => {
         const targetId = tab.dataset.settingsTab;
         
         settingsTabs.forEach(t => t.classList.remove('active'));
@@ -1652,7 +1705,7 @@
     const screenshotModal = document.getElementById('screenshot-preview-modal');
     const screenshotPreviewImg = document.getElementById('screenshot-preview-img');
     
-    document.getElementById('save-png-btn').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('save-png-btn'), () => {
       // アニメーション状態を保存
       const cardStates = [];
       const cards = workspaceBoard.querySelectorAll('.card');
@@ -1701,7 +1754,7 @@
     });
     
     // PowerPoint出力機能
-    document.getElementById('save-pptx-btn').addEventListener('click', async () => {
+    addClickOrTouchListener(document.getElementById('save-pptx-btn'), async () => {
       const btn = document.getElementById('save-pptx-btn');
       const originalText = btn.textContent;
       let backgroundImageWarning = false;
@@ -2105,12 +2158,18 @@
       screenshotPreviewCanvas = null;
     }
     
-    document.getElementById('screenshot-preview-close-btn').addEventListener('click', closeScreenshotModal);
+    addClickOrTouchListener(document.getElementById('screenshot-preview-close-btn'), closeScreenshotModal);
     screenshotModal.addEventListener('click', (e) => {
       if (e.target === screenshotModal) closeScreenshotModal();
     });
+    screenshotModal.addEventListener('touchend', (e) => {
+      if (e.target === screenshotModal) {
+        e.preventDefault();
+        closeScreenshotModal();
+      }
+    });
     
-    document.getElementById('screenshot-save-file-btn').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('screenshot-save-file-btn'), () => {
       if (!screenshotPreviewCanvas) return;
       const a = document.createElement('a');
       a.download = 'cardmap-' + (new Date().toISOString().slice(0, 10)) + '.png';
@@ -2120,11 +2179,14 @@
     });
     
     const screenshotCopyMenu = document.getElementById('screenshot-copy-menu');
-    document.getElementById('screenshot-copy-clipboard-btn').addEventListener('click', (e) => {
+    addClickOrTouchListener(document.getElementById('screenshot-copy-clipboard-btn'), (e) => {
       e.stopPropagation();
       screenshotCopyMenu.classList.toggle('open');
     });
     document.addEventListener('click', () => {
+      screenshotCopyMenu.classList.remove('open');
+    });
+    document.addEventListener('touchend', () => {
       screenshotCopyMenu.classList.remove('open');
     });
     screenshotCopyMenu.addEventListener('click', (e) => e.stopPropagation());
@@ -2176,7 +2238,7 @@
       }
     }
     
-    document.getElementById('screenshot-copy-menu-programmatic').addEventListener('click', (e) => {
+    addClickOrTouchListener(document.getElementById('screenshot-copy-menu-programmatic'), (e) => {
       e.stopPropagation();
       doScreenshotCopyToClipboard();
     });
@@ -2287,7 +2349,7 @@
           el.style.backgroundColor = item.color;
           el.title = item.name;
           el.dataset.color = item.color;
-          el.addEventListener('click', () => {
+          addClickOrTouchListener(el, () => {
             nextCardColor = item.color;
             document.querySelectorAll('.next-card-color-option').forEach(opt => {
               opt.classList.toggle('active', opt.dataset.color === nextCardColor);
@@ -2352,15 +2414,15 @@
     });
     
     // ズーム機能
-    document.getElementById('zoom-in').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('zoom-in'), () => {
       setZoom(currentZoom + zoomStep);
     });
     
-    document.getElementById('zoom-out').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('zoom-out'), () => {
       setZoom(currentZoom - zoomStep);
     });
     
-    document.getElementById('zoom-reset').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('zoom-reset'), () => {
       setZoom(1);
     });
     
@@ -2437,12 +2499,12 @@
     });
     
     // キャンバスクリア
-    document.getElementById('clear-btn').addEventListener('click', () => {
+    addClickOrTouchListener(document.getElementById('clear-btn'), () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
     
     // カード追加（手書き）
-    document.getElementById('drawing-add-btn').addEventListener('click', addDrawingCard);
+    addClickOrTouchListener(document.getElementById('drawing-add-btn'), addDrawingCard);
     
     // 手書き入力時も Enter で追加
     document.addEventListener('keydown', (e) => {
@@ -2454,7 +2516,7 @@
     });
     
     // カード追加（テキスト）
-    document.getElementById('text-add-btn').addEventListener('click', addTextCard);
+    addClickOrTouchListener(document.getElementById('text-add-btn'), addTextCard);
     
     const textInputEl = document.getElementById('text-input');
     let textInputComposing = false;
@@ -2478,7 +2540,7 @@
     
     // 背景色の設定
     document.querySelectorAll('.color-option').forEach(option => {
-      option.addEventListener('click', () => {
+      addClickOrTouchListener(option, () => {
         // アクティブクラスを更新
         document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
         option.classList.add('active');
@@ -2491,7 +2553,7 @@
     
     // シンキングツールテンプレートの設定
     document.querySelectorAll('.template-option').forEach(option => {
-      option.addEventListener('click', () => {
+      addClickOrTouchListener(option, () => {
         // アクティブクラスを更新
         document.querySelectorAll('.template-option').forEach(opt => opt.classList.remove('active'));
         option.classList.add('active');
@@ -2522,7 +2584,7 @@
     });
     
     // 背景画像削除
-    document.getElementById('remove-bg-image').addEventListener('click', function() {
+    addClickOrTouchListener(document.getElementById('remove-bg-image'), function() {
       currentBgImage = null;
       document.getElementById('bg-image-upload').value = '';
       document.getElementById('bg-image-preview').classList.add('hidden');
@@ -2718,7 +2780,7 @@
       const deleteBtn = document.createElement('div');
       deleteBtn.className = 'delete-btn';
       deleteBtn.innerHTML = '×';
-      deleteBtn.addEventListener('click', (e) => {
+      addClickOrTouchListener(deleteBtn, (e) => {
         e.stopPropagation();
         deleteCard(card);
       });
@@ -2740,7 +2802,7 @@
         decreaseBtn.className = 'card-control-btn';
         decreaseBtn.innerHTML = '−';
         decreaseBtn.title = 'テキストを小さく';
-        decreaseBtn.addEventListener('click', (e) => {
+        addClickOrTouchListener(decreaseBtn, (e) => {
           e.stopPropagation();
           changeTextSize(card, -1);
         });
@@ -2751,7 +2813,7 @@
         resetBtn.className = 'card-control-btn active';
         resetBtn.innerHTML = '標準';
         resetBtn.title = '標準サイズに戻す';
-        resetBtn.addEventListener('click', (e) => {
+        addClickOrTouchListener(resetBtn, (e) => {
           e.stopPropagation();
           resetTextSize(card);
         });
@@ -2794,7 +2856,7 @@
         colorBtn.className = 'color-option-card';
         colorBtn.style.backgroundColor = colorOption.color;
         colorBtn.title = colorOption.name;
-        colorBtn.addEventListener('click', (e) => {
+        addClickOrTouchListener(colorBtn, (e) => {
           e.stopPropagation();
           changeCardColor(card, colorOption.color);
           colorIndicator.style.backgroundColor = colorOption.color;
@@ -2807,7 +2869,7 @@
       colorPickerBtn.appendChild(colorPickerPanel);
       
       // カラーピッカーの表示/非表示を切り替え
-      colorPickerBtn.addEventListener('click', (e) => {
+      addClickOrTouchListener(colorPickerBtn, (e) => {
         e.stopPropagation();
         // 他のカラーピッカーを閉じる
         document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
@@ -3197,7 +3259,7 @@
       updateConnectionLine(connection);
       
       // クリックで接続線を削除
-      line.addEventListener('click', (e) => {
+      addClickOrTouchListener(line, (e) => {
         e.stopPropagation();
         deleteConnection(connection);
       });
