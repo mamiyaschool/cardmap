@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カードマップ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body {
+      font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+      background-color: #f5fff9;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    .workspace-container {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 5px;
+      position: relative;
+    }
+    
+    .workspace {
+      position: relative;
+      overflow: hidden;
+      background-color: white;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+    }
+    
+    .workspace-board {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: 0 0;
+      background-color: inherit;
+      background-size: inherit;
+      background-position: inherit;
+      background-repeat: inherit;
+      transition: background 0.3s;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    
+    .card {
+      position: absolute;
+      background-color: #e6f7e9;
+      border-radius: 6px;
+      padding: 8px;
+      min-width: 40px;
+      min-height: 40px;
+      max-width: 320px;
+      container-type: inline-size;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      cursor: move;
+      user-select: none;
+      transition: box-shadow 0.2s, background-color 0.3s;
+      z-index: 1;
+      touch-action: none;
+    }
+    /* カード幅に合わせてテキストを縮小（収まりきるように） */
+    @container (min-width: 1px) {
+      .card .card-content { font-size: min(calc(1rem + 5pt), calc(8cqw + 5pt)); }
+      .card .card-content.text-xs { font-size: min(calc(0.75rem + 5pt), calc(6cqw + 5pt)); }
+      .card .card-content.text-sm { font-size: min(calc(0.875rem + 5pt), calc(7cqw + 5pt)); }
+      .card .card-content.text-md { font-size: min(calc(1rem + 5pt), calc(8cqw + 5pt)); }
+      .card .card-content.text-lg { font-size: min(calc(1.25rem + 5pt), calc(10cqw + 5pt)); }
+      .card .card-content.text-xl { font-size: min(calc(1.5rem + 5pt), calc(11cqw + 5pt)); }
+      .card .card-content.text-2xl { font-size: min(calc(1.75rem + 5pt), calc(12cqw + 5pt)); }
+      .card .card-content.text-3xl { font-size: min(calc(2rem + 5pt), calc(14cqw + 5pt)); }
+      .card .card-content.text-4xl { font-size: min(calc(2.5rem + 5pt), calc(16cqw + 5pt)); }
+    }
+    
+    .card.dragging {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+      z-index: 100;
+    }
+    
+    .card.connecting {
+      box-shadow: 0 0 0 3px #4caf50;
+    }
+    
+    /* カード追加時：重力加速度で落下し、下で2回バウンド */
+    /* 落下区間は t^2 に比例（等加速度）になるようキーフレームを配置 */
+    @keyframes card-drop-in {
+      0% {
+        top: -220px;
+      }
+      5% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.01);
+      }
+      10% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.04);
+      }
+      15% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.09);
+      }
+      20% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.16);
+      }
+      25% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.25);
+      }
+      30% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.36);
+      }
+      35% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.49);
+      }
+      40% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.64);
+      }
+      45% {
+        top: calc(-220px + (232px + var(--final-top)) * 0.81);
+      }
+      50% {
+        top: calc(var(--final-top) + 12px);
+      }
+      62% {
+        top: calc(var(--final-top) - 26px);
+      }
+      74% {
+        top: calc(var(--final-top) + 4px);
+      }
+      84% {
+        top: calc(var(--final-top) - 10px);
+      }
+      100% {
+        top: var(--final-top);
+      }
+    }
+    
+    .card.card-drop-in {
+      animation: card-drop-in 1.15s linear forwards;
+    }
+    
+    /* 選択中のフローティング＋回転系のふらつき */
+    @keyframes card-selected-float {
+      0%, 100% {
+        transform: translateY(-2px) rotate(0deg);
+        box-shadow: 0 0 0 3px #2e7d32, 0 6px 20px rgba(46, 125, 50, 0.25), 0 12px 28px rgba(0, 0, 0, 0.12);
+      }
+      25% {
+        transform: translateY(-2px) rotate(1deg);
+        box-shadow: 0 0 0 3px #2e7d32, 0 6px 20px rgba(46, 125, 50, 0.25), 0 12px 28px rgba(0, 0, 0, 0.12);
+      }
+      50% {
+        transform: translateY(-2px) rotate(-0.8deg);
+        box-shadow: 0 0 0 3px #2e7d32, 0 6px 20px rgba(46, 125, 50, 0.25), 0 12px 28px rgba(0, 0, 0, 0.12);
+      }
+      75% {
+        transform: translateY(-2px) rotate(0.65deg);
+        box-shadow: 0 0 0 3px #2e7d32, 0 6px 20px rgba(46, 125, 50, 0.25), 0 12px 28px rgba(0, 0, 0, 0.12);
+      }
+    }
+    
+    .card.selected {
+      z-index: 50;
+      animation: card-selected-float 3s ease-in-out infinite;
+      box-shadow: 0 0 0 3px #2e7d32, 0 6px 20px rgba(46, 125, 50, 0.25), 0 12px 28px rgba(0, 0, 0, 0.12);
+    }
+    
+    .card.selected.dragging {
+      animation: none;
+      transform: none;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+    }
+    
+    .card-content {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      word-break: break-word;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    
+    .delete-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      background-color: #e53935;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 2;
+    }
+    
+    .card.selected .delete-btn {
+      opacity: 1;
+    }
+    
+    .resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23388e3c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='22 12 18 12 22 8 18 8'%3E%3C/polyline%3E%3Cpolyline points='12 22 12 18 8 22 8 18'%3E%3C/polyline%3E%3Cpath d='M12 2v16M2 12h16'%3E%3C/path%3E%3C/svg%3E");
+      background-size: 10px 10px;
+      background-position: bottom right;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    
+    .card:hover .resize-handle,
+    .card.selected .resize-handle {
+      opacity: 1;
+    }
+    
+    .card-controls {
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      padding: 3px;
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 3;
+    }
+    
+    .card.selected .card-controls {
+      opacity: 1;
+    }
+    
+    .card-control-btn {
+      width: 28px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .card-control-btn:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .card-control-btn.active {
+      background-color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .color-picker-btn {
+      position: relative;
+    }
+    
+    .color-picker-btn .color-indicator {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    
+    .color-picker-panel {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 5px;
+      background-color: white;
+      border-radius: 8px;
+      padding: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      display: none;
+      z-index: 1000;
+      width: 160px;
+    }
+    
+    .color-picker-panel.active {
+      display: block;
+    }
+    
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+    }
+    
+    .color-option-card {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    
+    .color-option-card:hover {
+      transform: scale(1.1);
+    }
+    
+    /* モバイル用 - 選択時のみ削除ボタン・リサイズハンドル表示 */
+    @media (max-width: 768px) {
+      .card.selected .delete-btn,
+      .card.selected .resize-handle {
+        opacity: 1;
+      }
+    }
+    
+    .connection-line {
+      position: absolute;
+      height: 2px;
+      padding: 6px 0;
+      margin: -6px 0;
+      box-sizing: content-box;
+      background-color: #4caf50;
+      background-clip: content-box;
+      transform-origin: left center;
+      z-index: 0;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    
+    .connection-line:hover {
+      background-color: #388e3c;
+    }
+    
+    .drawing-canvas-wrapper {
+      aspect-ratio: 1;
+      width: 100%;
+      /* 正方形を維持：幅のみ制限し高さは aspect-ratio で一致させる */
+      max-width: min(320px, 50vh, 85vw);
+      min-width: 160px;
+      min-height: 160px;
+      flex-shrink: 0;
+    }
+    #drawing-canvas {
+      border: 1px solid #ddd;
+      background-color: white;
+      border-radius: 8px;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    
+    /* 接続元を選んだあと、他カードにポインター */
+    .workspace.connecting-from .card {
+      cursor: pointer;
+    }
+    
+    .toolbar {
+      background-color: #2e7d32;
+      color: white;
+      padding: 10px;
+      border-radius: 8px 8px 0 0;
+    }
+    
+    .btn {
+      transition: all 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn-active {
+      background-color: #1b5e20 !important;
+    }
+    
+    /* モード表示 - ワークスペース外に移動（横幅に合わせて縮小） */
+    .status-bar {
+      background-color: #f0f0f0;
+      border-top: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0.4em 0.65em;
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 0.75em 1.25em;
+      font-size: clamp(9px, 2.2vw, 13px);
+      color: #333;
+      min-width: 0;
+    }
+    
+    .status-bar > * {
+      flex-shrink: 0;
+    }
+    
+    .status-bar .btn {
+      padding: 0.35em 0.65em;
+      font-size: 1em;
+    }
+    
+    .mode-indicator {
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.35em;
+      white-space: nowrap;
+    }
+    
+    .mode-indicator-dot {
+      width: 0.6em;
+      height: 0.6em;
+      min-width: 6px;
+      min-height: 6px;
+      border-radius: 50%;
+      background-color: #4caf50;
+    }
+    
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+      container-type: inline-size;
+      container-name: app;
+    }
+    
+    .main-content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    
+    .bottom-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      /* タブと「閉じる」が入る幅に縮小 */
+      width: max-content;
+      min-width: 240px;
+      max-width: min(400px, 92vw);
+      z-index: 10;
+      background-color: rgba(56, 142, 60, 0.92);
+      backdrop-filter: blur(6px);
+      border-radius: 12px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+      transition: box-shadow 0.2s ease;
+      overflow: hidden;
+    }
+    .bottom-panel-drag-handle {
+      cursor: grab;
+      user-select: none;
+    }
+    .bottom-panel-drag-handle:active {
+      cursor: grabbing;
+    }
+    
+    .bottom-panel-content {
+      max-height: 80vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      transition: max-height 0.3s ease, opacity 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .bottom-panel-content .input-panels {
+      width: 100%;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+    
+    .bottom-panel.collapsed .bottom-panel-content {
+      max-height: 0;
+      padding: 0;
+      margin: 0;
+      opacity: 0;
+    }
+    
+    .bottom-panel.collapsed .panel-toggle-btn-expand {
+      display: inline-flex;
+    }
+    
+    .bottom-panel.collapsed .panel-toggle-btn-collapse {
+      display: none;
+    }
+    
+    .bottom-panel .panel-toggle-btn-expand {
+      display: none;
+    }
+    
+    .bottom-panel:not(.collapsed) .panel-toggle-btn-collapse {
+      display: inline-flex;
+    }
+    
+    .bottom-panel.collapsed .input-tabs {
+      display: none;
+    }
+    
+    .bottom-panel.collapsed .flex.items-center.justify-between {
+      justify-content: center;
+    }
+    
+    .panel-toggle-btn {
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+    
+    .input-tabs {
+      display: flex;
+      flex-direction: row;
+      background-color: #2e7d32;
+      border-radius: 8px;
+      writing-mode: horizontal-tb;
+      flex-wrap: nowrap;
+    }
+    
+    .input-tab {
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.8);
+      border-bottom: 2px solid transparent;
+      writing-mode: horizontal-tb;
+      white-space: nowrap;
+    }
+    
+    .input-tab.active {
+      color: white;
+      border-bottom: 2px solid white;
+    }
+    
+    .input-panels {
+      min-height: 200px;
+    }
+    
+    .input-panel {
+      display: none;
+      min-height: 200px;
+    }
+    
+    .input-panel.active {
+      display: flex;
+      flex-direction: column;
+      min-height: 200px;
+    }
+    
+    /* 出力・背景設定パネル内ボタン：緑背景で視認性を確保 */
+    #output-panel .btn,
+    #settings-panel .btn {
+      background-color: #ffffff !important;
+      color: #1b5e20 !important;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      font-weight: 500;
+    }
+    #output-panel .btn:hover,
+    #settings-panel .btn:hover {
+      background-color: #e8f5e9 !important;
+      border-color: rgba(255, 255, 255, 0.9);
+      color: #0d3d0f !important;
+    }
+    /* パネル内のボタン：白背景＋濃い枠でパネル背景と明確に区別 */
+    .panel-inner .btn {
+      background-color: #ffffff !important;
+      color: #1b5e20 !important;
+      border: 2px solid #2e7d32 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+    .panel-inner .btn:hover {
+      background-color: #e8f5e9 !important;
+      border-color: #1b5e20 !important;
+      color: #0d3d0f !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    #settings-panel #remove-bg-image {
+      background-color: #c62828 !important;
+      color: #fff !important;
+      border-color: #b71c1c !important;
+    }
+    #settings-panel #remove-bg-image:hover {
+      background-color: #b71c1c !important;
+      border-color: #8e0e0e !important;
+    }
+    
+    /* 出力・背景設定パネル：内側のパネル風エリア（背景＋中央揃え） */
+    .panel-inner {
+      background-color: #e8f0e9;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+    }
+    .output-panel-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .output-panel-inner .hint-text {
+      color: #455a64;
+      margin-bottom: 0;
+    }
+    .settings-panel-inner {
+      display: block;
+    }
+    .settings-panel-inner .settings-subpanel {
+      max-width: 100%;
+      margin: 0 auto;
+    }
+    .settings-panel-inner .settings-section {
+      text-align: center;
+    }
+    .settings-panel-inner .settings-section > * {
+      justify-content: center;
+    }
+    .settings-panel-inner .flex.flex-wrap {
+      justify-content: center;
+    }
+    .settings-panel-inner .flex.flex-col {
+      align-items: center;
+    }
+    .settings-panel-inner .template-grid {
+      justify-content: center;
+      margin: 0 auto;
+    }
+    .settings-panel-inner .hint-text {
+      color: #455a64;
+    }
+    .settings-panel-inner .settings-section {
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    .settings-panel-inner .settings-title {
+      color: #37474f;
+    }
+    /* パネル内の背景色ボタン：枠でパネル背景と区別し、選択時は強調 */
+    .settings-panel-inner .color-option {
+      border: 2px solid rgba(0, 0, 0, 0.28);
+      box-sizing: border-box;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    .settings-panel-inner .color-option:hover {
+      border-color: rgba(0, 0, 0, 0.5);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+    .settings-panel-inner .color-option.active {
+      border: 3px solid #1b5e20;
+      box-shadow: 0 0 0 2px #e8f0e9, 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    .bg-color-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      justify-items: center;
+      max-width: 100%;
+    }
+    
+    /* 背景設定パネル内のサブタブ */
+    .settings-tabs {
+      display: flex;
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 2px;
+      margin-bottom: 10px;
+    }
+    
+    .settings-tab {
+      flex: 1;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.85);
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+      transition: background 0.2s, color 0.2s;
+    }
+    
+    .settings-tab:hover {
+      color: white;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .settings-tab.active {
+      color: white;
+      background-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .settings-subpanel {
+      display: none;
+    }
+    
+    .settings-subpanel.active {
+      display: block;
+    }
+    
+    .hint-text {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
+    /* テキストサイズクラス */
+    .text-xs {
+      font-size: 0.75rem;
+    }
+    
+    .text-sm {
+      font-size: 0.875rem;
+    }
+    
+    .text-md {
+      font-size: 1rem;
+    }
+    
+    .text-lg {
+      font-size: 1.25rem;
+    }
+    
+    .text-xl {
+      font-size: 1.5rem;
+    }
+    
+    .text-2xl {
+      font-size: 1.75rem;
+    }
+    
+    .text-3xl {
+      font-size: 2rem;
+    }
+    
+    .text-4xl {
+      font-size: 2.5rem;
+    }
+    
+    .color-option {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .color-option:hover {
+      transform: scale(1.2);
+    }
+    
+    .color-option.active {
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 2px #2e7d32;
+    }
+    
+    .next-card-color-option {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .next-card-color-option:hover {
+      transform: scale(1.15);
+    }
+    .next-card-color-option.active {
+      border-color: rgba(255,255,255,0.9);
+      box-shadow: 0 0 0 2px #2e7d32;
+    }
+    /* カードの色を均等に2段配置（8列×2行） */
+    #text-panel-card-colors,
+    #drawing-panel-card-colors {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+    /* 円形に（楕円にならないよう幅高さを同じに） */
+    #text-panel-card-colors .next-card-color-option,
+    #drawing-panel-card-colors .next-card-color-option {
+      width: 22px;
+      height: 22px;
+      min-width: 22px;
+      min-height: 22px;
+      justify-self: center;
+    }
+    
+    /* ズームコントロール - ワークスペース外に移動 */
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.3em;
+      white-space: nowrap;
+    }
+    
+    .zoom-btn {
+      width: 1.6em;
+      height: 1.6em;
+      min-width: 20px;
+      min-height: 20px;
+      background-color: #e0e0e0;
+      color: #333;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1em;
+      font-weight: bold;
+      border: 1px solid #ccc;
+    }
+    
+    .zoom-btn:hover {
+      background-color: #d0d0d0;
+    }
+    
+    .zoom-level {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 1em;
+      padding: 0 0.4em;
+      min-width: 3em;
+      text-align: center;
+    }
+    
+    /* 横幅が狭いときはパネルをさらに縮小 */
+    @container app (max-width: 380px) {
+      .status-bar { font-size: 8px; }
+    }
+    @container app (max-width: 320px) {
+      .status-bar { font-size: 7px; }
+    }
+    
+    /* シンキングツールの背景 */
+    .template-option {
+      width: 100px;
+      height: 75px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      background-size: cover;
+      background-position: center;
+      border: 2px solid #ddd;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .template-option:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .template-option.active {
+      border: 3px solid #4caf50;
+      box-shadow: 0 0 0 2px #fff;
+    }
+    
+    .template-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 12px;
+      padding: 4px;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    /* シンキングツール背景 - 黒系に変更 */
+    .bg-fishbone {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='0' y1='50%25' x2='100%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='20%25' y1='30%25' x2='30%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='20%25' y1='70%25' x2='30%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='40%25' y1='30%25' x2='50%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='40%25' y1='70%25' x2='50%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='60%25' y1='30%25' x2='70%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='60%25' y1='70%25' x2='70%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='85%25' y='50%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E結果%3C/text%3E%3Ctext x='20%25' y='25%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因1%3C/text%3E%3Ctext x='40%25' y='25%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因2%3C/text%3E%3Ctext x='60%25' y='25%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因3%3C/text%3E%3Ctext x='20%25' y='75%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因4%3C/text%3E%3Ctext x='40%25' y='75%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因5%3C/text%3E%3Ctext x='60%25' y='75%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E要因6%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-quadrant {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='50%25' y1='0' x2='50%25' y2='100%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='0' y1='50%25' x2='100%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-jellyfish {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50%25' cy='30%25' r='15%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ctext x='50%25' y='30%25' font-family='Arial' font-size='16' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E中心テーマ%3C/text%3E%3Cline x1='40%25' y1='45%25' x2='25%25' y2='65%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ccircle cx='25%25' cy='70%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='25%25' y='70%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eサブテーマ1%3C/text%3E%3Cline x1='50%25' y1='45%25' x2='50%25' y2='65%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ccircle cx='50%25' cy='70%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='50%25' y='70%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eサブテーマ2%3C/text%3E%3Cline x1='60%25' y1='45%25' x2='75%25' y2='65%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ccircle cx='75%25' cy='70%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='75%25' y='70%25' font-family='Arial' font-size='14' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eサブテーマ3%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-venn {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='35%25' cy='50%25' r='30%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ccircle cx='65%25' cy='50%25' r='30%25' fill='rgba(70, 70, 70, 0.1)' stroke='rgba(70, 70, 70, 0.6)' stroke-width='2' /%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-ychart {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='0' y1='0' x2='50%25' y2='65%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='100%25' y1='0' x2='50%25' y2='65%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='50%25' y1='65%25' x2='50%25' y2='100%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-mindmap {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50%25' cy='50%25' r='12%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='14' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E中心%3C/text%3E%3Cline x1='50%25' y1='38%25' x2='30%25' y2='25%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='30%25' cy='25%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='50%25' y1='38%25' x2='70%25' y2='25%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='70%25' cy='25%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='50%25' y1='62%25' x2='30%25' y2='75%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='30%25' cy='75%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='50%25' y1='62%25' x2='70%25' y2='75%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='70%25' cy='75%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='38%25' y1='50%25' x2='20%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='20%25' cy='50%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='62%25' y1='50%25' x2='80%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='80%25' cy='50%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-flowchart {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cmarker id='arrowhead' markerWidth='10' markerHeight='10' refX='9' refY='3' orient='auto'%3E%3Cpolygon points='0 0, 10 3, 0 6' fill='rgba(50, 50, 50, 0.6)' /%3E%3C/marker%3E%3C/defs%3E%3Crect x='40%25' y='10%25' width='20%25' height='12%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' rx='3' /%3E%3Cline x1='50%25' y1='22%25' x2='50%25' y2='30%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' marker-end='url(%23arrowhead)' /%3E%3Cpolygon points='40%25,30%25 60%25,30%25 50%25,42%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='50%25' y1='42%25' x2='50%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' marker-end='url(%23arrowhead)' /%3E%3Crect x='40%25' y='50%25' width='20%25' height='12%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' rx='3' /%3E%3Cline x1='50%25' y1='62%25' x2='50%25' y2='70%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' marker-end='url(%23arrowhead)' /%3E%3Cellipse cx='50%25' cy='78%25' rx='10%25' ry='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-matrix {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='33%25' y1='0' x2='33%25' y2='100%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='67%25' y1='0' x2='67%25' y2='100%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='0' y1='33%25' x2='100%25' y2='33%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='0' y1='67%25' x2='100%25' y2='67%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ctext x='16%25' y='16%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E高/高%3C/text%3E%3Ctext x='50%25' y='16%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E高/低%3C/text%3E%3Ctext x='84%25' y='16%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E低/高%3C/text%3E%3Ctext x='16%25' y='84%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E低/低%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-timeline {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='10%25' y1='50%25' x2='90%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='3' /%3E%3Ccircle cx='20%25' cy='50%25' r='5' fill='rgba(50, 50, 50, 0.6)' /%3E%3Ccircle cx='40%25' cy='50%25' r='5' fill='rgba(50, 50, 50, 0.6)' /%3E%3Ccircle cx='60%25' cy='50%25' r='5' fill='rgba(50, 50, 50, 0.6)' /%3E%3Ccircle cx='80%25' cy='50%25' r='5' fill='rgba(50, 50, 50, 0.6)' /%3E%3Cline x1='20%25' y1='50%25' x2='20%25' y2='30%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='40%25' y1='50%25' x2='40%25' y2='30%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='60%25' y1='50%25' x2='60%25' y2='30%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Cline x1='80%25' y1='50%25' x2='80%25' y2='30%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='20%25' y='25%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E開始%3C/text%3E%3Ctext x='80%25' y='25%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E終了%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-pyramid {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='50%25,15%25 20%25,40%25 80%25,40%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cpolygon points='20%25,40%25 80%25,40%25 70%25,65%25 30%25,65%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cpolygon points='30%25,65%25 70%25,65%25 60%25,85%25 40%25,85%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='50%25' y1='15%25' x2='50%25' y2='85%25' stroke='rgba(50, 50, 50, 0.4)' stroke-width='1' stroke-dasharray='2,2' /%3E%3Ctext x='50%25' y='28%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E最上位%3C/text%3E%3Ctext x='50%25' y='53%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E中間%3C/text%3E%3Ctext x='50%25' y='75%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E基礎%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-swot {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='50%25' y1='0' x2='50%25' y2='100%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Cline x1='0' y1='50%25' x2='100%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ctext x='25%25' y='25%25' font-family='Arial' font-size='14' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3ES%3C/text%3E%3Ctext x='25%25' y='40%25' font-family='Arial' font-size='11' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E強み%3C/text%3E%3Ctext x='75%25' y='25%25' font-family='Arial' font-size='14' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3EW%3C/text%3E%3Ctext x='75%25' y='40%25' font-family='Arial' font-size='11' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E弱み%3C/text%3E%3Ctext x='25%25' y='70%25' font-family='Arial' font-size='14' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3EO%3C/text%3E%3Ctext x='25%25' y='85%25' font-family='Arial' font-size='11' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E機会%3C/text%3E%3Ctext x='75%25' y='70%25' font-family='Arial' font-size='14' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3ET%3C/text%3E%3Ctext x='75%25' y='85%25' font-family='Arial' font-size='11' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E脅威%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    .bg-5w1h {
+      background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50%25' cy='50%25' r='15%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='2' /%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='16' font-weight='bold' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E何を%3C/text%3E%3Cline x1='50%25' y1='35%25' x2='50%25' y2='20%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='50%25' cy='20%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='50%25' y='20%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eなぜ%3C/text%3E%3Cline x1='65%25' y1='50%25' x2='80%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='80%25' cy='50%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='80%25' y='50%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eどこで%3C/text%3E%3Cline x1='50%25' y1='65%25' x2='50%25' y2='80%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='50%25' cy='80%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='50%25' y='80%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eいつ%3C/text%3E%3Cline x1='35%25' y1='50%25' x2='20%25' y2='50%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='20%25' cy='50%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='20%25' y='50%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3E誰が%3C/text%3E%3Cline x1='58%25' y1='58%25' x2='70%25' y2='70%25' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1.5' /%3E%3Ccircle cx='70%25' cy='70%25' r='8%25' fill='rgba(50, 50, 50, 0.1)' stroke='rgba(50, 50, 50, 0.6)' stroke-width='1' /%3E%3Ctext x='70%25' y='70%25' font-family='Arial' font-size='12' fill='rgba(50, 50, 50, 0.9)' text-anchor='middle' dominant-baseline='middle'%3Eどのように%3C/text%3E%3C/svg%3E") !important;
+    }
+    
+    /* 画像アップロード関連 */
+    .file-upload {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    
+    .file-upload input[type=file] {
+      position: absolute;
+      top: 0;
+      right: 0;
+      min-width: 100%;
+      min-height: 100%;
+      font-size: 100px;
+      text-align: right;
+      filter: alpha(opacity=0);
+      opacity: 0;
+      outline: none;
+      background: white;
+      cursor: pointer;
+      display: block;
+    }
+    
+    .settings-section {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .settings-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    
+    .settings-title {
+      color: white;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    
+    /* テンプレートグリッド */
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+    }
+    
+    /* テンプレートのサムネイル */
+    .template-thumbnail {
+      width: 100%;
+      height: 100%;
+      background-color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    /* キー操作ヘルプ */
+    .key-help {
+      display: flex;
+      align-items: center;
+      gap: 0.3em;
+      color: #666;
+      font-size: 1em;
+      white-space: nowrap;
+    }
+    
+    .key-badge {
+      background-color: #e0e0e0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 0.05em 0.25em;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+    /* スクリーンショットプレビュー用モーダル */
+    #screenshot-preview-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    #screenshot-preview-modal.open {
+      display: flex;
+    }
+    .screenshot-preview-dialog {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 95vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .screenshot-preview-dialog img {
+      max-width: 100%;
+      max-height: 60vh;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+    .screenshot-preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      position: relative;
+    }
+    .screenshot-copy-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 4px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 4px 0;
+      min-width: 180px;
+      z-index: 10;
+    }
+    .screenshot-copy-menu.open {
+      display: block;
+    }
+    .screenshot-copy-menu button {
+      display: block;
+      width: 100%;
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      text-align: left;
+      font-size: 14px;
+      cursor: pointer;
+      color: #333;
+      font-family: inherit;
+    }
+    .screenshot-copy-menu button:hover {
+      background: #f0f0f0;
+    }
+    .screenshot-copy-menu-hint {
+      padding: 6px 16px;
+      font-size: 11px;
+      color: #888;
+      border-top: 1px solid #eee;
+    }
+    .screenshot-preview-img-hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container p-2">
+    <header class="mb-1">
+      <h1 class="text-lg font-bold text-gray-700">カードマップ</h1>
+    </header>
+    
+    <div class="main-content">
+      <div class="workspace-container mb-1">
+        <div id="workspace" class="workspace">
+          <div id="workspace-board" class="workspace-board"></div>
+        </div>
+      </div>
+      
+      <!-- モード・ズームパネル（描画フィールドの下） -->
+      <div class="status-bar mb-1 rounded">
+        <div class="mode-indicator">
+          <span class="mode-indicator-dot"></span>
+          <span id="mode-text"></span>
+        </div>
+        <div class="key-help">
+          <span>選択: <span class="key-badge">↑</span><span class="key-badge">↓</span><span class="key-badge">←</span><span class="key-badge">→</span> 移動</span>
+          <span>|</span>
+          <span><span class="key-badge">Delete</span> 削除</span>
+        </div>
+        <div class="zoom-controls">
+          <div id="zoom-out" class="zoom-btn">−</div>
+          <div id="zoom-level" class="zoom-level">100%</div>
+          <div id="zoom-in" class="zoom-btn">＋</div>
+          <div id="zoom-reset" class="zoom-btn">↺</div>
+        </div>
+      </div>
+      
+      <div id="bottom-panel" class="bottom-panel p-2">
+      <div id="panel-drag-handle" class="bottom-panel-drag-handle flex items-center justify-between gap-2 mb-2">
+        <div class="input-tabs mb-0 flex-1 min-w-0">
+          <div class="input-tab active" data-tab="text">テキスト入力</div>
+          <div class="input-tab" data-tab="drawing">手書き入力</div>
+          <div class="input-tab" data-tab="settings">背景設定</div>
+          <div class="input-tab" data-tab="output">出力</div>
+        </div>
+        <button type="button" id="panel-toggle" class="btn panel-toggle-btn bg-white/20 hover:bg-white/30 text-white" title="パネルを閉じる">
+          <span class="panel-toggle-btn-collapse">閉じる</span>
+          <span class="panel-toggle-btn-collapse">▼</span>
+          <span class="panel-toggle-btn-expand">入力パネルを開く</span>
+          <span class="panel-toggle-btn-expand">▲</span>
+        </button>
+      </div>
+      
+      <div class="bottom-panel-content">
+      <div class="input-panels">
+        <!-- テキスト入力パネル -->
+        <div id="text-panel" class="input-panel active">
+          <div class="flex flex-col flex-1 min-h-0">
+            <div class="flex items-center gap-2 flex-shrink-0 mb-1">
+              <span class="hint-text whitespace-nowrap">カードの色</span>
+              <div id="text-panel-card-colors" class="flex flex-wrap gap-1"></div>
+            </div>
+            <textarea id="text-input" class="flex-1 min-h-0 w-full p-3 border rounded-md resize-none" placeholder="テキストを入力してください..."></textarea>
+            <div class="flex items-center justify-between mt-2 gap-2 flex-shrink-0">
+              <div class="hint-text">Enterで追加、Shift+Enterで改行</div>
+              <button id="text-add-btn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm">
+                追加
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 手書き入力パネル -->
+        <div id="drawing-panel" class="input-panel">
+          <div class="flex flex-col flex-1 min-h-0">
+            <div class="flex items-center gap-2 flex-shrink-0 mb-1">
+              <span class="hint-text whitespace-nowrap">カードの色</span>
+              <div id="drawing-panel-card-colors" class="flex flex-wrap gap-1"></div>
+            </div>
+            <div class="flex flex-col gap-2 flex-1 min-h-0 items-stretch">
+              <div class="drawing-canvas-wrapper flex-shrink-0">
+                <canvas id="drawing-canvas" class="w-full h-full"></canvas>
+              </div>
+              <div class="flex gap-2 justify-end items-center flex-shrink-0 py-1">
+                <button id="clear-btn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-sm whitespace-nowrap">
+                  クリア
+                </button>
+                <button id="drawing-add-btn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm whitespace-nowrap">
+                  追加
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 出力パネル -->
+        <div id="output-panel" class="input-panel">
+          <div class="panel-inner output-panel-inner flex flex-col flex-1 min-h-0 justify-center gap-3 items-center text-center">
+            <p class="hint-text">描画フィールドを画像として保存またはコピーします。</p>
+            <div class="flex flex-wrap gap-2 justify-center">
+              <button id="save-png-btn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">
+                画像出力
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 背景設定パネル -->
+        <div id="settings-panel" class="input-panel">
+          <div class="flex flex-col flex-1 min-h-0">
+          <div class="settings-tabs flex-shrink-0">
+            <div class="settings-tab active" data-settings-tab="color">背景色</div>
+            <div class="settings-tab" data-settings-tab="image">画像設定</div>
+            <div class="settings-tab" data-settings-tab="thinking">シンキングツール</div>
+          </div>
+          <div class="panel-inner settings-panel-inner flex-1 min-h-0 overflow-y-auto">
+          <!-- 背景色サブパネル -->
+          <div id="settings-color" class="settings-subpanel active">
+            <div class="settings-section">
+              <div class="bg-color-grid">
+                <div class="color-option active" style="background-color: #ffffff;" data-color="#ffffff"></div>
+                <div class="color-option" style="background-color: #fdf2f8;" data-color="#fdf2f8"></div>
+                <div class="color-option" style="background-color: #f5f3ff;" data-color="#f5f3ff"></div>
+                <div class="color-option" style="background-color: #fff7ed;" data-color="#fff7ed"></div>
+                <div class="color-option" style="background-color: #f0fdf4;" data-color="#f0fdf4"></div>
+                <div class="color-option" style="background-color: #eff6ff;" data-color="#eff6ff"></div>
+                <div class="color-option" style="background-color: #fefce8;" data-color="#fefce8"></div>
+                <div class="color-option" style="background-color: #f8fafc;" data-color="#f8fafc"></div>
+                <div class="color-option" style="background-color: #f0fdfa;" data-color="#f0fdfa"></div>
+                <div class="color-option" style="background-color: #fef3f2;" data-color="#fef3f2"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 画像設定サブパネル -->
+          <div id="settings-image" class="settings-subpanel">
+            <div class="settings-section">
+              <div class="flex flex-col gap-2">
+                <div class="file-upload">
+                  <button class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                    画像を選択
+                  </button>
+                  <input type="file" id="bg-image-upload" accept="image/*" />
+                </div>
+                <div id="bg-image-preview" class="hidden mt-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-16 h-16 bg-cover bg-center border rounded" id="preview-thumbnail"></div>
+                    <button id="remove-bg-image" class="btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
+                      削除
+                    </button>
+                  </div>
+                </div>
+                <div class="hint-text">※画像は端末内で処理され、外部に送信されません</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- シンキングツールサブパネル -->
+          <div id="settings-thinking" class="settings-subpanel">
+            <div class="settings-section">
+              <div class="template-grid">
+                <div class="template-option active" data-template="none">
+                  <div class="template-thumbnail">
+                    <span style="color: #2e7d32; font-weight: 500;">なし</span>
+                  </div>
+                </div>
+                <div class="template-option" data-template="venn2">
+                  <div class="w-full h-full" style="background-image: url('img/venn2.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">ベン図２</div>
+                </div>
+                <div class="template-option" data-template="venn3">
+                  <div class="w-full h-full" style="background-image: url('img/venn3.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">ベン図３</div>
+                </div>
+                <div class="template-option" data-template="coordinate">
+                  <div class="w-full h-full" style="background-image: url('img/coordinate.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">座標軸</div>
+                </div>
+                <div class="template-option" data-template="diamond">
+                  <div class="w-full h-full" style="background-image: url('img/diamond.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">ダイヤモンドランキング</div>
+                </div>
+                <div class="template-option" data-template="data-chart">
+                  <div class="w-full h-full" style="background-image: url('img/data-chart.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">データチャート</div>
+                </div>
+                <div class="template-option" data-template="web6">
+                  <div class="w-full h-full" style="background-image: url('img/web6.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">イメージマップ６</div>
+                </div>
+                <div class="template-option" data-template="web0">
+                  <div class="w-full h-full" style="background-image: url('img/web0.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">イメージマップ０</div>
+                </div>
+                <div class="template-option" data-template="y-chart">
+                  <div class="w-full h-full" style="background-image: url('img/y-chart.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">Yチャート</div>
+                </div>
+                <div class="template-option" data-template="x-chart">
+                  <div class="w-full h-full" style="background-image: url('img/x-chart.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">Xチャート</div>
+                </div>
+                <div class="template-option" data-template="w-chart">
+                  <div class="w-full h-full" style="background-image: url('img/w-chart.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">Wチャート</div>
+                </div>
+                <div class="template-option" data-template="butterfly">
+                  <div class="w-full h-full" style="background-image: url('img/butterfly.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">バタフライチャート１</div>
+                </div>
+                <div class="template-option" data-template="butterfly2">
+                  <div class="w-full h-full" style="background-image: url('img/butterfly2.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">バタフライチャート２</div>
+                </div>
+                <div class="template-option" data-template="fishbone">
+                  <div class="w-full h-full" style="background-image: url('img/fishbone.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">要因特性図（フィッシュボーン）</div>
+                </div>
+                <div class="template-option" data-template="pmi">
+                  <div class="w-full h-full" style="background-image: url('img/pmi.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">PMI図</div>
+                </div>
+                <div class="template-option" data-template="bear">
+                  <div class="w-full h-full" style="background-image: url('img/bear.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">クマ手チャート</div>
+                </div>
+                <div class="template-option" data-template="jellyfish">
+                  <div class="w-full h-full" style="background-image: url('img/jellyfish.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">クラゲチャート</div>
+                </div>
+                <div class="template-option" data-template="tree">
+                  <div class="w-full h-full" style="background-image: url('img/tree.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">ロジックツリー</div>
+                </div>
+                <div class="template-option" data-template="candy">
+                  <div class="w-full h-full" style="background-image: url('img/candy.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">キャンディチャート</div>
+                </div>
+                <div class="template-option" data-template="kwl">
+                  <div class="w-full h-full" style="background-image: url('img/KWL.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">KWL</div>
+                </div>
+                <div class="template-option" data-template="information-analysis-chart">
+                  <div class="w-full h-full" style="background-image: url('img/information-analysis-chart.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">情報分析チャート</div>
+                </div>
+                <div class="template-option" data-template="pyramid">
+                  <div class="w-full h-full" style="background-image: url('img/pyramid.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">ピラミッドチャート</div>
+                </div>
+                <div class="template-option" data-template="mountain">
+                  <div class="w-full h-full" style="background-image: url('img/mountain.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">プロット図</div>
+                </div>
+                <div class="template-option" data-template="target">
+                  <div class="w-full h-full" style="background-image: url('img/target.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">同心円チャート</div>
+                </div>
+                <div class="template-option" data-template="table">
+                  <div class="w-full h-full" style="background-image: url('img/table.png'); background-size: cover; background-position: center;"></div>
+                  <div class="template-label">テーブル</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+    </div>
+  </div>
+  
+  <!-- スクリーンショットプレビュー用モーダル -->
+  <div id="screenshot-preview-modal" aria-hidden="true">
+    <div class="screenshot-preview-dialog">
+      <p class="hint-text mb-0">プレビュー</p>
+      <img id="screenshot-preview-img" src="" alt="スクリーンショットプレビュー" />
+      <p class="screenshot-preview-img-hint">画像を右クリック → 「画像をコピー」でもコピーできます</p>
+      <div class="screenshot-preview-actions">
+        <button type="button" id="screenshot-save-file-btn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">画像として保存（PNG）</button>
+        <div style="position: relative;">
+          <button type="button" id="screenshot-copy-clipboard-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">クリップボードにコピー</button>
+          <div id="screenshot-copy-menu" class="screenshot-copy-menu">
+            <button type="button" id="screenshot-copy-menu-programmatic">画像をコピー</button>
+            <div class="screenshot-copy-menu-hint">失敗時は画像を右クリック → 「画像をコピー」</div>
+          </div>
+        </div>
+        <button type="button" id="screenshot-preview-close-btn" class="btn bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">閉じる</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // パネル折りたたみ・位置
+    const bottomPanel = document.getElementById('bottom-panel');
+    const panelToggleBtn = document.getElementById('panel-toggle');
+    const panelDragHandle = document.getElementById('panel-drag-handle');
+    const PANEL_POSITION_LEFT_KEY = 'cardmap-panel-left';
+    const PANEL_POSITION_BOTTOM_KEY = 'cardmap-panel-bottom';
+    
+    const mainContent = document.querySelector('.main-content');
+    function getPanelBounds() {
+      const r = mainContent.getBoundingClientRect();
+      const w = bottomPanel.offsetWidth;
+      const h = bottomPanel.offsetHeight;
+      const maxBottom = Math.max(0, (r.height || mainContent.clientHeight) - h);
+      return { minLeft: 0, maxLeft: Math.max(0, r.width - w), maxBottom };
+    }
+    function applyPanelPosition(leftPx, bottomPx) {
+      const b = getPanelBounds();
+      if (leftPx != null) bottomPanel.style.left = Math.round(Math.max(0, Math.min(b.maxLeft, leftPx))) + 'px';
+      if (bottomPx != null) bottomPanel.style.bottom = Math.round(Math.max(0, Math.min(b.maxBottom, bottomPx))) + 'px';
+    }
+    function savePanelPosition() {
+      const left = parseInt(bottomPanel.style.left, 10);
+      const bottom = parseInt(bottomPanel.style.bottom, 10);
+      try {
+        if (!isNaN(left)) localStorage.setItem(PANEL_POSITION_LEFT_KEY, String(left));
+        if (!isNaN(bottom)) localStorage.setItem(PANEL_POSITION_BOTTOM_KEY, String(bottom));
+      } catch (_) {}
+    }
+    const savedLeft = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_LEFT_KEY), 10); } catch (_) { return null; } })();
+    const savedBottom = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_BOTTOM_KEY), 10); } catch (_) { return null; } })();
+    applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedBottom === 'number' && !isNaN(savedBottom) ? savedBottom : 0);
+    
+    panelToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      bottomPanel.classList.toggle('collapsed');
+      panelToggleBtn.title = bottomPanel.classList.contains('collapsed') ? 'パネルを開く' : 'パネルを閉じる';
+      setTimeout(adjustWorkspaceSize, 280);
+    });
+    
+    // パネルをドラッグで移動（タブバー・余白・コンテンツの空き領域から可。ボタン・入力・色選択等は除く）
+    function isPanelDragTarget(el) {
+      if (!el || !bottomPanel.contains(el)) return false;
+      if (el.id === 'panel-toggle' || (el.closest && el.closest('#panel-toggle'))) return false;
+      if (el.closest && el.closest('input, textarea, button, a, select')) return false;
+      if (el.closest && el.closest('.color-option, .template-option, .settings-tab')) return false;
+      if (el.id === 'drawing-canvas' || (el.closest && el.closest('#drawing-canvas, .drawing-canvas-wrapper'))) return false;
+      return true;
+    }
+    const DRAG_THRESHOLD_PX = 5;
+    let panelDidDrag = false;
+    function consumePanelDragClick(e) {
+      if (panelDidDrag) {
+        e.preventDefault();
+        e.stopPropagation();
+        panelDidDrag = false;
+        document.removeEventListener('click', consumePanelDragClick, true);
+      }
+    }
+    function startPanelDrag(e) {
+      if (!isPanelDragTarget(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = parseInt(bottomPanel.style.left, 10) || 0;
+      const startBottom = parseInt(bottomPanel.style.bottom, 10) || 0;
+      const { maxLeft, maxBottom } = getPanelBounds();
+      let draggedEnoughToConsumeClick = false;
+      function move(ev) {
+        const dx = ev.clientX - startX;
+        const dy = startY - ev.clientY;
+        if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) draggedEnoughToConsumeClick = true;
+        const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
+        const newBottom = Math.max(0, Math.min(maxBottom, startBottom + dy));
+        applyPanelPosition(newLeft, newBottom);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        if (draggedEnoughToConsumeClick) {
+          panelDidDrag = true;
+          savePanelPosition();
+          document.addEventListener('click', consumePanelDragClick, true);
+        }
+      }
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    }
+    bottomPanel.addEventListener('mousedown', startPanelDrag, true);
+    bottomPanel.addEventListener('touchstart', (e) => {
+      if (!isPanelDragTarget(e.target)) return;
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      const startX = e.touches[0].clientX;
+      const startY = e.touches[0].clientY;
+      const startLeft = parseInt(bottomPanel.style.left, 10) || 0;
+      const startBottom = parseInt(bottomPanel.style.bottom, 10) || 0;
+      const { maxLeft, maxBottom } = getPanelBounds();
+      function move(ev) {
+        if (ev.touches.length !== 1) return;
+        const dx = ev.touches[0].clientX - startX;
+        const dy = startY - ev.touches[0].clientY;
+        const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
+        const newBottom = Math.max(0, Math.min(maxBottom, startBottom + dy));
+        applyPanelPosition(newLeft, newBottom);
+      }
+      function stop() {
+        document.removeEventListener('touchmove', move);
+        document.removeEventListener('touchend', stop);
+        savePanelPosition();
+      }
+      document.addEventListener('touchmove', move, { passive: false });
+      document.addEventListener('touchend', stop);
+    }, { passive: false });
+    
+    // タブ切り替え
+    const tabs = document.querySelectorAll('.input-tab');
+    const panels = document.querySelectorAll('.input-panel');
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetPanel = tab.dataset.tab;
+        
+        // タブの切り替え
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // パネルの切り替え
+        panels.forEach(panel => panel.classList.remove('active'));
+        document.getElementById(`${targetPanel}-panel`).classList.add('active');
+        
+        // 手書き入力パネルが表示された時にキャンバスサイズを再調整
+        if (targetPanel === 'drawing') {
+          setTimeout(() => {
+            resizeCanvas();
+          }, 50);
+        }
+      });
+    });
+    
+    // 背景設定パネル内のサブタブ切り替え
+    const settingsTabs = document.querySelectorAll('.settings-tab');
+    const settingsSubpanels = document.querySelectorAll('.settings-subpanel');
+    
+    settingsTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetId = tab.dataset.settingsTab;
+        
+        settingsTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        settingsSubpanels.forEach(panel => {
+          panel.classList.toggle('active', panel.id === 'settings-' + targetId);
+        });
+      });
+    });
+    
+    // 出力：フィールドをスクリーンショット
+    function captureWorkspaceAsCanvas() {
+      if (typeof html2canvas === 'undefined') {
+        return Promise.reject(new Error('html2canvas を読み込んでください'));
+      }
+      return html2canvas(workspace, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      });
+    }
+    
+    let screenshotPreviewCanvas = null;
+    const screenshotModal = document.getElementById('screenshot-preview-modal');
+    const screenshotPreviewImg = document.getElementById('screenshot-preview-img');
+    
+    document.getElementById('save-png-btn').addEventListener('click', () => {
+      captureWorkspaceAsCanvas().then(canvas => {
+        screenshotPreviewCanvas = canvas;
+        screenshotPreviewImg.src = canvas.toDataURL('image/png');
+        screenshotModal.classList.add('open');
+        screenshotModal.setAttribute('aria-hidden', 'false');
+      }).catch(() => alert('キャプチャに失敗しました'));
+    });
+    
+    function closeScreenshotModal() {
+      screenshotModal.classList.remove('open');
+      screenshotModal.setAttribute('aria-hidden', 'true');
+      screenshotCopyMenu.classList.remove('open');
+      screenshotPreviewCanvas = null;
+    }
+    
+    document.getElementById('screenshot-preview-close-btn').addEventListener('click', closeScreenshotModal);
+    screenshotModal.addEventListener('click', (e) => {
+      if (e.target === screenshotModal) closeScreenshotModal();
+    });
+    
+    document.getElementById('screenshot-save-file-btn').addEventListener('click', () => {
+      if (!screenshotPreviewCanvas) return;
+      const a = document.createElement('a');
+      a.download = 'cardmap-' + (new Date().toISOString().slice(0, 10)) + '.png';
+      a.href = screenshotPreviewCanvas.toDataURL('image/png');
+      a.click();
+      closeScreenshotModal();
+    });
+    
+    const screenshotCopyMenu = document.getElementById('screenshot-copy-menu');
+    document.getElementById('screenshot-copy-clipboard-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      screenshotCopyMenu.classList.toggle('open');
+    });
+    document.addEventListener('click', () => {
+      screenshotCopyMenu.classList.remove('open');
+    });
+    screenshotCopyMenu.addEventListener('click', (e) => e.stopPropagation());
+    
+    function dataUrlToBlob(dataUrl) {
+      const base64 = dataUrl.split(',')[1];
+      if (!base64) return null;
+      const bin = atob(base64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: 'image/png' });
+    }
+    
+    async function doScreenshotCopyToClipboard() {
+      if (!screenshotPreviewCanvas) return;
+      const cap = screenshotPreviewCanvas;
+      if (!navigator.clipboard || !window.ClipboardItem) {
+        alert('お使いのブラウザでは画像のコピーに対応していません。\n画像を右クリック → 「画像をコピー」をお試しください。');
+        return;
+      }
+      if (!window.isSecureContext) {
+        alert('クリップボードには HTTPS または localhost で開いた場合のみ対応しています。\n画像を右クリック → 「画像をコピー」をお試しください。');
+        return;
+      }
+      let blob = null;
+      try {
+        const dataUrl = cap.toDataURL('image/png');
+        blob = dataUrlToBlob(dataUrl);
+      } catch (_) {}
+      if (!blob) {
+        try {
+          blob = await new Promise((resolve, reject) => {
+            cap.toBlob(b => (b ? resolve(b) : reject()), 'image/png');
+          });
+        } catch (_) {}
+      }
+      if (!blob) {
+        alert('画像の取得に失敗しました。');
+        return;
+      }
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        alert('クリップボードにコピーしました');
+        screenshotCopyMenu.classList.remove('open');
+        closeScreenshotModal();
+      } catch (err) {
+        screenshotCopyMenu.classList.remove('open');
+        alert('クリップボードに書き込めませんでした。\n・このページを http://localhost または https:// で開き直す\n・画像を右クリック → 「画像をコピー」\nのいずれかをお試しください。');
+      }
+    }
+    
+    document.getElementById('screenshot-copy-menu-programmatic').addEventListener('click', (e) => {
+      e.stopPropagation();
+      doScreenshotCopyToClipboard();
+    });
+    
+    // キャンバス設定
+    const canvas = document.getElementById('drawing-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // キャンバスのサイズを表示サイズに合わせる関数
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      
+      // 実際のサイズを設定（高DPIディスプレイ対応）
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      
+      // コンテキストをスケール
+      ctx.scale(dpr, dpr);
+      
+      // 描画設定を再設定
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#000';
+    }
+    
+    // 初期サイズ設定（少し遅延させてDOMが完全に読み込まれた後に実行）
+    setTimeout(() => {
+      resizeCanvas();
+    }, 100);
+    
+    // ウィンドウリサイズ時にキャンバスサイズを調整
+    window.addEventListener('resize', resizeCanvas);
+    
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    
+    // ワークスペース（表示枠）とボード（カード・線の論理座標）
+    const workspace = document.getElementById('workspace');
+    const workspaceBoard = document.getElementById('workspace-board');
+    let refWorkspaceWidth = 0;
+    let refWorkspaceHeight = 0;
+    let currentBoardScaleX = 1;
+    let currentBoardScaleY = 1;
+    const modeText = document.getElementById('mode-text');
+    let cards = [];
+    let connections = [];
+    let connectingCard = null;
+    
+    function updateModeText() {
+      modeText.textContent = connectingCard ? '接続先のカードをクリック' : 'ドラッグで移動・クリックで接続';
+    }
+    let selectedCard = null;
+    
+    // ズーム設定
+    let currentZoom = 1;
+    const zoomStep = 0.1;
+    const minZoom = 0.5;
+    const maxZoom = 2;
+    
+    // 背景設定
+    let currentBgColor = '#ffffff';
+    let currentTemplate = 'none';
+    let currentBgImage = null;
+    
+    // カードの色設定 - 白から始まる虹のグラデーション（パステル）
+    const cardColors = [
+      { color: '#ffffff', name: '白' },
+      { color: '#ffcdd2', name: 'ピンク' },
+      { color: '#ffccbc', name: 'ピーチ' },
+      { color: '#ffe0b2', name: 'オレンジ' },
+      { color: '#ffecb3', name: 'アンバー' },
+      { color: '#fff9c4', name: 'イエロー' },
+      { color: '#f1f8e9', name: 'ライム' },
+      { color: '#c8e6c9', name: 'ミント' },
+      { color: '#b2dfdb', name: 'ティール' },
+      { color: '#b3e5fc', name: 'スカイ' },
+      { color: '#bbdefb', name: 'ライトブルー' },
+      { color: '#c5cae9', name: 'インディゴ' },
+      { color: '#e1bee7', name: 'ラベンダー' },
+      { color: '#d1c4e9', name: '紫' },
+      { color: '#e8eaf6', name: '薄紫' },
+      { color: '#fce4ec', name: '薄ピンク' }
+    ];
+    
+    let nextCardColor = cardColors[0].color;
+    
+    function applySelectedColorToInputAreas(color) {
+      const textInput = document.getElementById('text-input');
+      const drawingCanvas = document.getElementById('drawing-canvas');
+      if (textInput) textInput.style.backgroundColor = color;
+      if (drawingCanvas) drawingCanvas.style.backgroundColor = color;
+    }
+    
+    function renderNextCardColorOptions() {
+      const containers = [
+        document.getElementById('text-panel-card-colors'),
+        document.getElementById('drawing-panel-card-colors')
+      ];
+      containers.forEach(container => {
+        if (!container) return;
+        container.innerHTML = '';
+        cardColors.forEach((item, index) => {
+          const el = document.createElement('div');
+          el.className = 'next-card-color-option' + (item.color === nextCardColor ? ' active' : '');
+          el.style.backgroundColor = item.color;
+          el.title = item.name;
+          el.dataset.color = item.color;
+          el.addEventListener('click', () => {
+            nextCardColor = item.color;
+            document.querySelectorAll('.next-card-color-option').forEach(opt => {
+              opt.classList.toggle('active', opt.dataset.color === nextCardColor);
+            });
+            applySelectedColorToInputAreas(nextCardColor);
+          });
+          container.appendChild(el);
+        });
+      });
+      applySelectedColorToInputAreas(nextCardColor);
+    }
+    renderNextCardColorOptions();
+    
+    // テキストサイズの定義
+    const textSizes = [
+      { name: 'text-xs', label: '極小' },
+      { name: 'text-sm', label: '小' },
+      { name: 'text-md', label: '標準' },
+      { name: 'text-lg', label: '大' },
+      { name: 'text-xl', label: '極大' },
+      { name: 'text-2xl', label: '特大' },
+      { name: 'text-3xl', label: '超大' },
+      { name: 'text-4xl', label: '巨大' }
+    ];
+    
+    // ウィンドウリサイズ時にワークスペースのサイズを調整（ボードを拡縮してカードも一緒に縮小）
+    function adjustWorkspaceSize() {
+      const container = document.querySelector('.workspace-container');
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      
+      const aspectRatio = 1.414; // A4横 297mm / 210mm
+      
+      let width = containerWidth;
+      let height = width / aspectRatio;
+      if (height > containerHeight) {
+        height = containerHeight;
+        width = height * aspectRatio;
+      }
+      
+      if ((refWorkspaceWidth === 0 || refWorkspaceHeight === 0) && width > 0 && height > 0) {
+        refWorkspaceWidth = width;
+        refWorkspaceHeight = height;
+        workspaceBoard.style.width = refWorkspaceWidth + 'px';
+        workspaceBoard.style.height = refWorkspaceHeight + 'px';
+      }
+      
+      workspace.style.width = width + 'px';
+      workspace.style.height = height + 'px';
+      currentBoardScaleX = refWorkspaceWidth > 0 ? width / refWorkspaceWidth : 1;
+      currentBoardScaleY = refWorkspaceHeight > 0 ? height / refWorkspaceHeight : 1;
+      workspaceBoard.style.transform = `scale(${currentBoardScaleX}, ${currentBoardScaleY})`;
+    }
+    
+    // 初期化時とウィンドウリサイズ時にワークスペースのサイズを調整
+    window.addEventListener('load', adjustWorkspaceSize);
+    window.addEventListener('resize', adjustWorkspaceSize);
+    window.addEventListener('resize', () => {
+      const left = parseInt(bottomPanel.style.left, 10);
+      const bottom = parseInt(bottomPanel.style.bottom, 10);
+      if (!isNaN(left) || !isNaN(bottom)) applyPanelPosition(isNaN(left) ? undefined : left, isNaN(bottom) ? undefined : bottom);
+    });
+    
+    // ズーム機能
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      setZoom(currentZoom + zoomStep);
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      setZoom(currentZoom - zoomStep);
+    });
+    
+    document.getElementById('zoom-reset').addEventListener('click', () => {
+      setZoom(1);
+    });
+    
+    function setZoom(zoom) {
+      // ズームレベルを制限
+      zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+      currentZoom = zoom;
+      
+      // ワークスペースにズームを適用
+      workspace.style.transform = `scale(${zoom})`;
+      workspace.style.transformOrigin = 'center center';
+      
+      // ズームレベル表示を更新
+      document.getElementById('zoom-level').textContent = `${Math.round(zoom * 100)}%`;
+    }
+    
+    // 描画イベント
+    function startDrawing(e) {
+      isDrawing = true;
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      
+      // キャンバス内の相対座標を計算（スケールは既に適用済み）
+      [lastX, lastY] = [
+        clientX - rect.left,
+        clientY - rect.top
+      ];
+    }
+    
+    function draw(e) {
+      if (!isDrawing) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      
+      // キャンバス内の相対座標を計算（スケールは既に適用済み）
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      
+      [lastX, lastY] = [x, y];
+    }
+    
+    function stopDrawing() {
+      isDrawing = false;
+    }
+    
+    // マウスイベント
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // タッチイベント
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startDrawing(e);
+    });
+    
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      draw(e);
+    });
+    
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      stopDrawing();
+    });
+    
+    // キャンバスクリア
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+    
+    // カード追加（手書き）
+    document.getElementById('drawing-add-btn').addEventListener('click', addDrawingCard);
+    
+    // 手書き入力時も Enter で追加
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (!document.getElementById('drawing-panel').classList.contains('active')) return;
+      if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      e.preventDefault();
+      addDrawingCard();
+    });
+    
+    // カード追加（テキスト）
+    document.getElementById('text-add-btn').addEventListener('click', addTextCard);
+    
+    const textInputEl = document.getElementById('text-input');
+    let textInputComposing = false;
+    
+    textInputEl.addEventListener('compositionstart', () => {
+      textInputComposing = true;
+    });
+    textInputEl.addEventListener('compositionend', () => {
+      setTimeout(() => {
+        textInputComposing = false;
+      }, 150);
+    });
+    
+    // エンターキーでカード追加（IME変換・確定中は反応しない / Safari対応）
+    textInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !textInputComposing) {
+        e.preventDefault();
+        addTextCard();
+      }
+    });
+    
+    // 背景色の設定
+    document.querySelectorAll('.color-option').forEach(option => {
+      option.addEventListener('click', () => {
+        // アクティブクラスを更新
+        document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+        option.classList.add('active');
+        
+        // 背景色を設定
+        currentBgColor = option.dataset.color;
+        updateWorkspaceBackground();
+      });
+    });
+    
+    // シンキングツールテンプレートの設定
+    document.querySelectorAll('.template-option').forEach(option => {
+      option.addEventListener('click', () => {
+        // アクティブクラスを更新
+        document.querySelectorAll('.template-option').forEach(opt => opt.classList.remove('active'));
+        option.classList.add('active');
+        
+        // テンプレートを設定
+        currentTemplate = option.dataset.template;
+        updateWorkspaceBackground();
+      });
+    });
+    
+    // 背景画像アップロード
+    document.getElementById('bg-image-upload').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          currentBgImage = event.target.result;
+          
+          // プレビューを表示
+          document.getElementById('bg-image-preview').classList.remove('hidden');
+          document.getElementById('preview-thumbnail').style.backgroundImage = `url(${currentBgImage})`;
+          
+          // 背景を更新
+          updateWorkspaceBackground();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    
+    // 背景画像削除
+    document.getElementById('remove-bg-image').addEventListener('click', function() {
+      currentBgImage = null;
+      document.getElementById('bg-image-upload').value = '';
+      document.getElementById('bg-image-preview').classList.add('hidden');
+      updateWorkspaceBackground();
+    });
+    
+    // ワークスペースの背景を更新（ボードに設定して拡縮時に一緒に縮小）
+    function updateWorkspaceBackground() {
+      workspaceBoard.style.backgroundColor = currentBgColor;
+      
+      // テンプレート名から画像ファイル名へのマッピング
+      const templateImageMap = {
+        'venn2': 'img/venn2.png',
+        'venn3': 'img/venn3.png',
+        'coordinate': 'img/coordinate.png',
+        'diamond': 'img/diamond.png',
+        'data-chart': 'img/data-chart.png',
+        'web6': 'img/web6.png',
+        'web0': 'img/web0.png',
+        'y-chart': 'img/y-chart.png',
+        'x-chart': 'img/x-chart.png',
+        'w-chart': 'img/w-chart.png',
+        'butterfly': 'img/butterfly.png',
+        'butterfly2': 'img/butterfly2.png',
+        'fishbone': 'img/fishbone.png',
+        'pmi': 'img/pmi.png',
+        'bear': 'img/bear.png',
+        'jellyfish': 'img/jellyfish.png',
+        'tree': 'img/tree.png',
+        'candy': 'img/candy.png',
+        'kwl': 'img/KWL.png',
+        'information-analysis-chart': 'img/information-analysis-chart.png',
+        'pyramid': 'img/pyramid.png',
+        'mountain': 'img/mountain.png',
+        'target': 'img/target.png',
+        'table': 'img/table.png'
+      };
+      
+      // 優先順位: 1. 画像設定パネルの画像 2. シンキングツールのURL画像 3. シンキングツールの画像テンプレート
+      if (currentBgImage) {
+        workspaceBoard.style.backgroundImage = `url(${currentBgImage})`;
+        workspaceBoard.style.backgroundSize = 'contain';
+        workspaceBoard.style.backgroundPosition = 'center';
+        workspaceBoard.style.backgroundRepeat = 'no-repeat';
+      } else if (currentTemplate !== 'none' && templateImageMap[currentTemplate]) {
+        workspaceBoard.style.backgroundImage = `url(${templateImageMap[currentTemplate]})`;
+        workspaceBoard.style.backgroundSize = 'contain';
+        workspaceBoard.style.backgroundPosition = 'center';
+        workspaceBoard.style.backgroundRepeat = 'no-repeat';
+      } else {
+        workspaceBoard.style.backgroundImage = 'none';
+        workspaceBoard.style.backgroundSize = '';
+        workspaceBoard.style.backgroundRepeat = '';
+      }
+    }
+    
+    // キャンバスが空かどうかをチェック
+    function isCanvasEmpty(canvas) {
+      const context = canvas.getContext('2d');
+      const pixelBuffer = new Uint32Array(
+        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+      );
+      return !pixelBuffer.some(color => color !== 0);
+    }
+    
+    function addDrawingCard() {
+      // キャンバスの内容を画像として取得
+      const imageData = canvas.toDataURL('image/png');
+      
+      // キャンバスが空かチェック
+      const emptyCanvas = isCanvasEmpty(canvas);
+      if (emptyCanvas) return;
+      
+      // カード作成
+      createCard(imageData, 'image', null, null, nextCardColor);
+      
+      // キャンバスをクリア
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    function addTextCard() {
+      const textInput = document.getElementById('text-input');
+      const text = textInput.value.trim();
+      
+      if (!text) return;
+      
+      // カード作成
+      createCard(text, 'text', null, null, nextCardColor);
+      
+      // 入力欄をクリア
+      textInput.value = '';
+      
+      // 入力欄にフォーカスを戻す
+      textInput.focus();
+    }
+    
+    // A3上の付箋サイズ換算用（76mm基準・76/297でスケール）
+    const A3_SHORT_MM = 297;
+    const A3_LONG_MM = 420;
+    const STICKY_MM = 76;
+    
+    function getStickySidePx(boardW, boardH) {
+      const side = (STICKY_MM / A3_SHORT_MM) * Math.min(boardW, boardH);
+      return Math.max(40, Math.min(200, side));
+    }
+    
+    // テキストの行数と長さに基づいてカードサイズを計算（付箋スケール・76を1とする相対値）
+    function calculateCardSize(text) {
+      const lines = text.split('\n');
+      const lineCount = lines.length;
+      const maxLineLength = Math.max(...lines.map(line => line.length));
+      let w = 76;
+      let h = 38;
+      if (lineCount > 3) h = Math.min(100, 30 + lineCount * 8);
+      if (maxLineLength > 20) w = Math.min(140, 60 + maxLineLength * 0.4);
+      return { width: w, height: h };
+    }
+    
+    // 落下着地点を計算（一番下 or 重なったカードの上に積む）
+    function computeLandingTop(left, cardWidth, cardHeight, boardH, existingCards) {
+      const margin = 8;
+      let landingTop = Math.max(0, boardH - cardHeight - margin);
+      for (const other of existingCards) {
+        const oLeft = other.offsetLeft;
+        const oRight = other.offsetLeft + other.offsetWidth;
+        const ourRight = left + cardWidth;
+        if (ourRight <= oLeft || left >= oRight) continue;
+        const candidateTop = other.offsetTop - cardHeight;
+        if (candidateTop < landingTop) landingTop = Math.max(0, candidateTop);
+      }
+      return landingTop;
+    }
+    
+    function createCard(content, type, left = null, top = null, color = cardColors[0].color) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.id = Date.now();
+      card.dataset.type = type;
+      card.dataset.color = color;
+      card.style.backgroundColor = color;
+      
+      const boardW = workspaceBoard.offsetWidth || refWorkspaceWidth;
+      const boardH = workspaceBoard.offsetHeight || refWorkspaceHeight;
+      
+      // A3を基準に付箋サイズ（76mm角）でカードサイズを算出・テキストも画像も正方形
+      const stickyPx = getStickySidePx(boardW, boardH);
+      const scale = stickyPx / STICKY_MM;
+      let cardWidth, cardHeight;
+      if (type === 'text') {
+        const size = calculateCardSize(content);
+        const w = Math.round(size.width * scale);
+        const h = Math.round(size.height * scale);
+        const side = Math.max(w, h, stickyPx);
+        cardWidth = cardHeight = side;
+      } else {
+        cardWidth = cardHeight = stickyPx;
+      }
+      card.style.width = cardWidth + 'px';
+      card.style.height = cardHeight + 'px';
+      
+      // 位置：横はランダム、縦は落下着地（一番下 or 重なったカードの上）
+      if (left === null) {
+        left = Math.random() * Math.max(20, boardW - cardWidth - 20);
+      }
+      const existingCards = Array.from(workspaceBoard.querySelectorAll('.card'));
+      top = computeLandingTop(left, cardWidth, cardHeight, boardH, existingCards);
+      
+      card.style.left = left + 'px';
+      card.style.setProperty('--final-top', top + 'px');
+      card.style.top = '-220px';
+      card.classList.add('card-drop-in');
+      
+      // コンテンツコンテナ
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'card-content';
+      
+      // コンテンツを表示
+      if (type === 'image') {
+        const img = document.createElement('img');
+        img.src = content;
+        img.style.width = '100%';
+        contentDiv.appendChild(img);
+      } else {
+        contentDiv.textContent = content;
+        contentDiv.style.whiteSpace = 'pre-wrap';
+        contentDiv.classList.add('text-lg'); // カード中央に大きく表示
+        card.dataset.textSizeIndex = '3'; // デフォルトは大（インデックス3）
+      }
+      
+      card.appendChild(contentDiv);
+      
+      // 削除ボタン
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.innerHTML = '×';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteCard(card);
+      });
+      card.appendChild(deleteBtn);
+      
+      // リサイズハンドル
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'resize-handle';
+      card.appendChild(resizeHandle);
+      
+      // カードコントロール（テキストサイズ変更と色変更）
+      const cardControls = document.createElement('div');
+      cardControls.className = 'card-controls';
+      
+      // テキストカードの場合はテキストサイズ変更ボタンを追加
+      if (type === 'text') {
+        // サイズ縮小ボタン
+        const decreaseBtn = document.createElement('div');
+        decreaseBtn.className = 'card-control-btn';
+        decreaseBtn.innerHTML = '−';
+        decreaseBtn.title = 'テキストを小さく';
+        decreaseBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          changeTextSize(card, -1);
+        });
+        cardControls.appendChild(decreaseBtn);
+        
+        // 標準サイズボタン
+        const resetBtn = document.createElement('div');
+        resetBtn.className = 'card-control-btn active';
+        resetBtn.innerHTML = '標準';
+        resetBtn.title = '標準サイズに戻す';
+        resetBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          resetTextSize(card);
+        });
+        cardControls.appendChild(resetBtn);
+        
+        // サイズ拡大ボタン
+        const increaseBtn = document.createElement('div');
+        increaseBtn.className = 'card-control-btn';
+        increaseBtn.innerHTML = '＋';
+        increaseBtn.title = 'テキストを大きく';
+        increaseBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          changeTextSize(card, 1);
+        });
+        cardControls.appendChild(increaseBtn);
+      }
+      
+      // 色変更ボタン（すべてのカードタイプに追加）
+      const colorPickerBtn = document.createElement('div');
+      colorPickerBtn.className = 'card-control-btn color-picker-btn';
+      colorPickerBtn.title = 'カードの色を変更';
+      
+      // 現在の色を表示するインジケーター
+      const colorIndicator = document.createElement('div');
+      colorIndicator.className = 'color-indicator';
+      colorIndicator.style.backgroundColor = color;
+      colorPickerBtn.appendChild(colorIndicator);
+      
+      // カラーピッカーパネル
+      const colorPickerPanel = document.createElement('div');
+      colorPickerPanel.className = 'color-picker-panel';
+      
+      // カラーグリッド
+      const colorGrid = document.createElement('div');
+      colorGrid.className = 'color-grid';
+      
+      // カラーオプションを追加
+      cardColors.forEach(colorOption => {
+        const colorBtn = document.createElement('div');
+        colorBtn.className = 'color-option-card';
+        colorBtn.style.backgroundColor = colorOption.color;
+        colorBtn.title = colorOption.name;
+        colorBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          changeCardColor(card, colorOption.color);
+          colorIndicator.style.backgroundColor = colorOption.color;
+          colorPickerPanel.classList.remove('active');
+        });
+        colorGrid.appendChild(colorBtn);
+      });
+      
+      colorPickerPanel.appendChild(colorGrid);
+      colorPickerBtn.appendChild(colorPickerPanel);
+      
+      // カラーピッカーの表示/非表示を切り替え
+      colorPickerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 他のカラーピッカーを閉じる
+        document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
+          if (panel !== colorPickerPanel) {
+            panel.classList.remove('active');
+          }
+        });
+        colorPickerPanel.classList.toggle('active');
+      });
+      
+      cardControls.appendChild(colorPickerBtn);
+      card.appendChild(cardControls);
+      
+      // カードのドラッグ／クリック（マウス）：ドラッグ＝移動、クリック＝接続
+      card.addEventListener('mousedown', startDragCard);
+      
+      // カードのドラッグ／クリック（タッチ）
+      card.addEventListener('touchstart', handleCardTouchStart, { passive: false });
+      
+      // リサイズ機能
+      resizeHandle.addEventListener('mousedown', startResizeCard);
+      resizeHandle.addEventListener('touchstart', startResizeCardTouch, { passive: false });
+      
+      workspaceBoard.appendChild(card);
+      cards.push(card);
+      
+      card.addEventListener('animationend', function onDropEnd(e) {
+        if (e.animationName !== 'card-drop-in') return;
+        card.removeEventListener('animationend', onDropEnd);
+        card.classList.remove('card-drop-in');
+        card.style.top = top + 'px';
+        updateConnections();
+      });
+      
+      return card;
+    }
+    
+    // カードの色を変更
+    function changeCardColor(card, color) {
+      card.style.backgroundColor = color;
+      card.dataset.color = color;
+    }
+    
+    // テキストサイズの変更
+    function changeTextSize(card, direction) {
+      if (card.dataset.type !== 'text') return;
+      
+      const contentDiv = card.querySelector('.card-content');
+      let currentSizeIndex = parseInt(card.dataset.textSizeIndex);
+      
+      // サイズインデックスを更新
+      currentSizeIndex = Math.max(0, Math.min(textSizes.length - 1, currentSizeIndex + direction));
+      card.dataset.textSizeIndex = currentSizeIndex;
+      
+      // 現在のサイズクラスをすべて削除
+      textSizes.forEach(size => {
+        contentDiv.classList.remove(size.name);
+      });
+      
+      // 新しいサイズクラスを追加
+      contentDiv.classList.add(textSizes[currentSizeIndex].name);
+      
+      // ボタンの状態を更新
+      updateTextSizeButtons(card);
+    }
+    
+    // テキストサイズをリセット
+    function resetTextSize(card) {
+      if (card.dataset.type !== 'text') return;
+      
+      const contentDiv = card.querySelector('.card-content');
+      
+      // 現在のサイズクラスをすべて削除
+      textSizes.forEach(size => {
+        contentDiv.classList.remove(size.name);
+      });
+      
+      // 標準サイズを設定
+      card.dataset.textSizeIndex = '2';
+      contentDiv.classList.add('text-md');
+      
+      // ボタンの状態を更新
+      updateTextSizeButtons(card);
+    }
+    
+    // テキストサイズボタンの状態を更新
+    function updateTextSizeButtons(card) {
+      const buttons = card.querySelectorAll('.card-control-btn:not(.color-picker-btn)');
+      const currentSizeIndex = parseInt(card.dataset.textSizeIndex);
+      
+      buttons.forEach((btn, index) => {
+        if (index === 1) { // 標準サイズボタン
+          btn.classList.toggle('active', currentSizeIndex === 2);
+        }
+      });
+    }
+    
+    // カードの削除
+    function deleteCard(card) {
+      // カードに接続されているコネクションを削除
+      connections = connections.filter(conn => {
+        if (conn.from === card || conn.to === card) {
+          conn.line.remove();
+          return false;
+        }
+        return true;
+      });
+      
+      // カードを配列から削除
+      const index = cards.indexOf(card);
+      if (index !== -1) {
+        cards.splice(index, 1);
+      }
+      
+      // 選択状態をクリア
+      if (selectedCard === card) {
+        selectedCard = null;
+      }
+      
+      // DOM要素を削除
+      card.remove();
+    }
+    
+    // カードのドラッグ開始（マウス）：移動したらドラッグ、しなければクリック＝接続
+    const DRAG_THRESHOLD = 5;
+    
+    function startDragCard(e) {
+      // 右クリックは無視
+      if (e.button === 2) return;
+      
+      // リサイズハンドルやコントロールボタンのクリックは無視
+      if (e.target.classList.contains('resize-handle') || 
+          e.target.classList.contains('card-control-btn') ||
+          e.target.classList.contains('color-indicator') ||
+          e.target.closest('.color-picker-panel')) {
+        return;
+      }
+      
+      e.preventDefault();
+      
+      const card = this;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let hasMoved = false;
+      
+      const rect = card.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const offsetX = (e.clientX - rect.left) / currentBoardScaleX;
+      const offsetY = (e.clientY - rect.top) / currentBoardScaleY;
+      
+      function moveCard(e) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (!hasMoved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          hasMoved = true;
+          selectCard(card, e);
+          card.classList.add('dragging');
+        }
+        if (!hasMoved) return;
+        const x = (e.clientX - workspaceRect.left) / currentZoom / currentBoardScaleX - offsetX;
+        const y = (e.clientY - workspaceRect.top) / currentZoom / currentBoardScaleY - offsetY;
+        const maxX = workspaceBoard.offsetWidth - card.offsetWidth;
+        const maxY = workspaceBoard.offsetHeight - card.offsetHeight;
+        card.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+        card.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+        updateConnections();
+      }
+      
+      function stopDrag() {
+        document.removeEventListener('mousemove', moveCard);
+        document.removeEventListener('mouseup', stopDrag);
+        card.classList.remove('dragging');
+        if (!hasMoved) {
+          handleCardSelect(card);
+        } else {
+          selectCard(card, e);
+        }
+      }
+      
+      document.addEventListener('mousemove', moveCard);
+      document.addEventListener('mouseup', stopDrag);
+    }
+    
+    // カードのタッチ開始（ドラッグ＝移動、クリック＝接続）
+    function handleCardTouchStart(e) {
+      if (e.target.classList.contains('resize-handle') || 
+          e.target.classList.contains('card-control-btn') ||
+          e.target.classList.contains('color-indicator') ||
+          e.target.closest('.color-picker-panel')) {
+        return;
+      }
+      
+      e.preventDefault();
+      
+      const card = this;
+      const touch = e.touches[0];
+      const startX = touch.clientX;
+      const startY = touch.clientY;
+      let hasMoved = false;
+      
+      const rect = card.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const offsetX = (touch.clientX - rect.left) / currentBoardScaleX;
+      const offsetY = (touch.clientY - rect.top) / currentBoardScaleY;
+      
+      function moveCard(e) {
+        const t = e.touches[0];
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        if (!hasMoved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          hasMoved = true;
+          selectCard(card, e);
+          card.classList.add('dragging');
+        }
+        if (!hasMoved) return;
+        const x = (t.clientX - workspaceRect.left) / currentZoom / currentBoardScaleX - offsetX;
+        const y = (t.clientY - workspaceRect.top) / currentZoom / currentBoardScaleY - offsetY;
+        const maxX = workspaceBoard.offsetWidth - card.offsetWidth;
+        const maxY = workspaceBoard.offsetHeight - card.offsetHeight;
+        card.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+        card.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+        updateConnections();
+      }
+      
+      function stopDrag(e) {
+        document.removeEventListener('touchmove', moveCard);
+        document.removeEventListener('touchend', stopDrag);
+        card.classList.remove('dragging');
+        if (!hasMoved) {
+          handleCardSelect(card);
+        } else {
+          selectCard(card, e);
+        }
+      }
+      
+      document.addEventListener('touchmove', moveCard, { passive: false });
+      document.addEventListener('touchend', stopDrag);
+    }
+    
+    // カードのリサイズ開始（マウス）
+    function startResizeCard(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const card = this.parentElement;
+      const startWidth = card.offsetWidth;
+      const startHeight = card.offsetHeight;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      
+      function resize(e) {
+        const width = startWidth + (e.clientX - startX) / currentZoom / currentBoardScaleX;
+        const height = startHeight + (e.clientY - startY) / currentZoom / currentBoardScaleY;
+        card.style.width = Math.max(40, width) + 'px';
+        card.style.height = Math.max(40, height) + 'px';
+        updateConnections();
+      }
+      
+      function stopResize() {
+        document.removeEventListener('mousemove', resize);
+        document.removeEventListener('mouseup', stopResize);
+      }
+      
+      document.addEventListener('mousemove', resize);
+      document.addEventListener('mouseup', stopResize);
+    }
+    
+    // カードのリサイズ開始（タッチ）
+    function startResizeCardTouch(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const card = this.parentElement;
+      const startWidth = card.offsetWidth;
+      const startHeight = card.offsetHeight;
+      const touch = e.touches[0];
+      const startX = touch.clientX;
+      const startY = touch.clientY;
+      
+      function resize(e) {
+        const touch = e.touches[0];
+        const width = startWidth + (touch.clientX - startX) / currentZoom / currentBoardScaleX;
+        const height = startHeight + (touch.clientY - startY) / currentZoom / currentBoardScaleY;
+        card.style.width = Math.max(40, width) + 'px';
+        card.style.height = Math.max(40, height) + 'px';
+        
+        // 接続線を更新
+        updateConnections();
+      }
+      
+      function stopResize() {
+        document.removeEventListener('touchmove', resize);
+        document.removeEventListener('touchend', stopResize);
+      }
+      
+      document.addEventListener('touchmove', resize, { passive: false });
+      document.addEventListener('touchend', stopResize);
+    }
+    
+    // カードの選択
+    function selectCard(card, e) {
+      // 前の選択を解除
+      if (selectedCard && selectedCard !== card) {
+        selectedCard.classList.remove('selected');
+      }
+      
+      // 新しいカードを選択
+      selectedCard = card;
+      card.classList.add('selected');
+    }
+    
+    // 選択解除（接続中のキャンセルも含む）
+    function clearSelection() {
+      if (selectedCard) {
+        selectedCard.classList.remove('selected');
+        selectedCard = null;
+      }
+      if (connectingCard) {
+        connectingCard.classList.remove('connecting');
+        connectingCard = null;
+        workspace.classList.remove('connecting-from');
+        updateModeText();
+      }
+    }
+    
+    // ワークスペースのクリックイベント - 選択解除・接続キャンセル（空き領域クリック時）
+    function isWorkspaceEmptyArea(target) {
+      return target === workspace || target === workspaceBoard;
+    }
+    
+    workspace.addEventListener('mousedown', (e) => {
+      if (!isWorkspaceEmptyArea(e.target)) return;
+      clearSelection();
+      document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
+        panel.classList.remove('active');
+      });
+    });
+    
+    workspace.addEventListener('touchstart', (e) => {
+      if (!isWorkspaceEmptyArea(e.target)) return;
+      clearSelection();
+      document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
+        panel.classList.remove('active');
+      });
+    });
+    
+    // クリックで接続：1つ目で接続元に、2つ目で線を引く
+    function handleCardSelect(card) {
+      if (!connectingCard) {
+        connectingCard = card;
+        card.classList.add('connecting');
+        workspace.classList.add('connecting-from');
+        selectCard(card, {});
+      } else if (connectingCard !== card) {
+        createConnection(connectingCard, card);
+        connectingCard.classList.remove('connecting');
+        connectingCard = null;
+        workspace.classList.remove('connecting-from');
+        selectCard(card, {});
+      } else {
+        connectingCard.classList.remove('connecting');
+        connectingCard = null;
+        workspace.classList.remove('connecting-from');
+      }
+      updateModeText();
+    }
+    
+    // 接続線を削除
+    function deleteConnection(connection) {
+      connection.line.remove();
+      connections = connections.filter(c => c !== connection);
+    }
+    
+    // カード間の接続を作成
+    function createConnection(fromCard, toCard) {
+      const line = document.createElement('div');
+      line.className = 'connection-line';
+      workspaceBoard.appendChild(line);
+      
+      const connection = {
+        from: fromCard,
+        to: toCard,
+        line: line
+      };
+      
+      connections.push(connection);
+      updateConnectionLine(connection);
+      
+      // クリックで接続線を削除
+      line.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteConnection(connection);
+      });
+    }
+    
+    // すべての接続線を更新
+    function updateConnections() {
+      connections.forEach(updateConnectionLine);
+    }
+    
+    // 接続線の位置を更新（ボード座標で計算）
+    function updateConnectionLine(connection) {
+      const fromX = connection.from.offsetLeft + connection.from.offsetWidth / 2;
+      const fromY = connection.from.offsetTop + connection.from.offsetHeight / 2;
+      const toX = connection.to.offsetLeft + connection.to.offsetWidth / 2;
+      const toY = connection.to.offsetTop + connection.to.offsetHeight / 2;
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      connection.line.style.width = length + 'px';
+      connection.line.style.left = fromX + 'px';
+      connection.line.style.top = fromY + 'px';
+      connection.line.style.transform = `rotate(${angle}deg)`;
+    }
+    
+    // 初期表示
+    updateModeText();
+    
+    // キーボードイベント
+    document.addEventListener('keydown', (e) => {
+      if (!selectedCard) return;
+      
+      const step = e.shiftKey ? 10 : 1; // Shiftキーを押している場合は大きく移動
+      let left = parseInt(selectedCard.style.left);
+      let top = parseInt(selectedCard.style.top);
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          left = Math.max(0, left - step);
+          break;
+        case 'ArrowRight':
+          left = Math.min(workspaceBoard.offsetWidth - selectedCard.offsetWidth, left + step);
+          break;
+        case 'ArrowUp':
+          top = Math.max(0, top - step);
+          break;
+        case 'ArrowDown':
+          top = Math.min(workspaceBoard.offsetHeight - selectedCard.offsetHeight, top + step);
+          break;
+        case 'Delete':
+          deleteCard(selectedCard);
+          return;
+        default:
+          return;
+      }
+      
+      selectedCard.style.left = left + 'px';
+      selectedCard.style.top = top + 'px';
+      
+      // 接続線を更新
+      updateConnections();
+      
+      // イベントのデフォルト動作を防止（ページのスクロールなど）
+      e.preventDefault();
+    });
+    
+    // ドキュメント全体のクリックイベント - カラーピッカーを閉じる
+    document.addEventListener('click', (e) => {
+      // カラーピッカーボタンまたはパネル内のクリックは無視
+      if (e.target.closest('.color-picker-btn') || e.target.closest('.color-picker-panel')) {
+        return;
+      }
+      
+      // すべてのカラーピッカーを閉じる
+      document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
+        panel.classList.remove('active');
+      });
+    });
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9cb43f77a4c18323',t:'MTc3MDY0OTM0OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
