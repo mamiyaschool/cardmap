@@ -482,8 +482,20 @@
       backdrop-filter: blur(6px);
       border-radius: 12px;
       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
-      transition: box-shadow 0.2s ease;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
       overflow: hidden;
+    }
+    /* 折り畳み時：パステルグリーンのすりガラス効果＋フロート風（浮遊時の陰で存在がわかる） */
+    .bottom-panel.collapsed {
+      background-color: rgba(180, 220, 180, 0.25);
+      backdrop-filter: blur(6px) saturate(150%);
+      -webkit-backdrop-filter: blur(6px) saturate(150%);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 16px 48px rgba(0, 0, 0, 0.15), 0 24px 64px rgba(0, 0, 0, 0.1);
+      animation: panel-float 4s ease-in-out infinite;
+    }
+    @keyframes panel-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
     }
     .bottom-panel-drag-handle {
       cursor: grab;
@@ -547,6 +559,19 @@
       font-size: 13px;
       border-radius: 8px;
       white-space: nowrap;
+    }
+    /* 折り畳み時の「入力パネルを開く」ボタン：はっきり見えるように */
+    .bottom-panel.collapsed .panel-toggle-btn {
+      background-color: rgba(255, 255, 255, 0.95) !important;
+      color: #1b5e20 !important;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+    }
+    .bottom-panel.collapsed .panel-toggle-btn:hover {
+      background-color: rgba(255, 255, 255, 1) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
     }
     
     .input-tabs {
@@ -1494,14 +1519,18 @@
     // パネルをドラッグで移動（タブバー・余白・コンテンツの空き領域から可。ボタン・入力・色選択等は除く）
     function isPanelDragTarget(el) {
       if (!el || !bottomPanel.contains(el)) return false;
+      // タブ選択直後はパネルドラッグを無効化
+      if (Date.now() < panelDragDisabledUntil) return false;
       if (el.id === 'panel-toggle' || (el.closest && el.closest('#panel-toggle'))) return false;
       if (el.closest && el.closest('input, textarea, button, a, select')) return false;
-      if (el.closest && el.closest('.color-option, .template-option, .settings-tab')) return false;
+      if (el.closest && el.closest('.color-option, .template-option, .settings-tab, .input-tab')) return false;
       if (el.id === 'drawing-canvas' || (el.closest && el.closest('#drawing-canvas, .drawing-canvas-wrapper'))) return false;
       return true;
     }
     const DRAG_THRESHOLD_PX = 5;
     let panelDidDrag = false;
+    let panelDragDisabledUntil = 0; // タブ選択直後のパネルドラッグ無効化用
+    
     function consumePanelDragClick(e) {
       if (panelDidDrag) {
         e.preventDefault();
@@ -1542,9 +1571,14 @@
     }
     bottomPanel.addEventListener('mousedown', startPanelDrag, true);
     bottomPanel.addEventListener('touchstart', (e) => {
+      // キャンバスエリアのタッチは無視
+      if (e.target.id === 'drawing-canvas' || e.target.closest('#drawing-canvas, .drawing-canvas-wrapper')) {
+        return;
+      }
       if (!isPanelDragTarget(e.target)) return;
       if (e.touches.length !== 1) return;
       e.preventDefault();
+      e.stopPropagation();
       const startX = e.touches[0].clientX;
       const startY = e.touches[0].clientY;
       const startLeft = parseInt(bottomPanel.style.left, 10) || 0;
@@ -1574,6 +1608,9 @@
     tabs.forEach(tab => {
       addClickOrTouchListener(tab, () => {
         const targetPanel = tab.dataset.tab;
+        
+        // タブ選択直後はパネルドラッグを一時的に無効化（300ms）
+        panelDragDisabledUntil = Date.now() + 300;
         
         // タブの切り替え
         tabs.forEach(t => t.classList.remove('active'));
@@ -2485,16 +2522,19 @@
     // タッチイベント
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
+      e.stopPropagation(); // パネルドラッグに伝播しないようにする
       startDrawing(e);
     });
     
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
+      e.stopPropagation(); // パネルドラッグに伝播しないようにする
       draw(e);
     });
     
     canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
+      e.stopPropagation(); // パネルドラッグに伝播しないようにする
       stopDrawing();
     });
     
