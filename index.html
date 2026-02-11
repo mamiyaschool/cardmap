@@ -6,6 +6,7 @@
   <title>カードマップ</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs/dist/pptxgen.bundle.js"></script>
   <style>
     body {
       font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
@@ -1203,6 +1204,9 @@
               <button id="save-png-btn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">
                 画像出力
               </button>
+              <button id="save-pptx-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
+                PowerPoint出力
+              </button>
             </div>
           </div>
         </div>
@@ -1576,6 +1580,404 @@
         screenshotModal.setAttribute('aria-hidden', 'false');
       }).catch(() => alert('キャプチャに失敗しました'));
     });
+    
+    // PowerPoint出力機能
+    document.getElementById('save-pptx-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('save-pptx-btn');
+      const originalText = btn.textContent;
+      let backgroundImageWarning = false;
+      
+      try {
+        btn.disabled = true;
+        btn.textContent = '出力中...';
+        
+        // 背景画像の読み込み警告をキャッチするためのフラグ
+        const originalConsoleWarn = console.warn;
+        console.warn = function(...args) {
+          if (args[0] && args[0].includes && args[0].includes('背景画像の読み込みに失敗')) {
+            backgroundImageWarning = true;
+          }
+          originalConsoleWarn.apply(console, args);
+        };
+        
+        await exportToPowerPoint();
+        
+        console.warn = originalConsoleWarn;
+        
+        btn.textContent = originalText;
+        btn.disabled = false;
+        
+        if (backgroundImageWarning) {
+          alert('PowerPointファイルを保存しました。\n\n注意: 背景画像の読み込みに失敗しました。\nfile://プロトコルで開いている場合、画像を読み込めない場合があります。\nローカルサーバーで実行するか、画像をBase64にエンコードしてください。');
+        } else {
+          alert('PowerPointファイルを保存しました');
+        }
+      } catch (error) {
+        console.error('PowerPoint出力エラー:', error);
+        btn.disabled = false;
+        btn.textContent = originalText;
+        alert('PowerPoint出力に失敗しました: ' + error.message);
+      }
+    });
+    
+    async function exportToPowerPoint() {
+      // pptxgenjsが読み込まれているか確認
+      if (typeof PptxGenJS === 'undefined') {
+        alert('PowerPoint出力ライブラリが読み込まれていません。\n\nページを再読み込みしてください。\n\nもし問題が続く場合は、ブラウザのコンソール（F12キー）を確認してください。');
+        console.error('PptxGenJS is not defined.');
+        console.log('利用可能なグローバル変数:', Object.keys(window).filter(k => k.toLowerCase().includes('pptx')));
+        return;
+      }
+      
+      const pptx = new PptxGenJS();
+      
+      // スライドサイズを設定（A4横）
+      pptx.layout = 'LAYOUT_WIDE';
+      
+      // スライドを追加
+      const slide = pptx.addSlide();
+      
+      // ワークスペースボードのサイズを取得
+      const boardW = workspaceBoard.offsetWidth || refWorkspaceWidth;
+      const boardH = workspaceBoard.offsetHeight || refWorkspaceHeight;
+      
+      // PowerPointのスライドサイズ（インチ単位、A4横: 11.69" x 8.27"）
+      const slideWidthInches = 11.69;
+      const slideHeightInches = 8.27;
+      
+      // ピクセルからインチへの変換率（96 DPIを想定）
+      const pxToInch = 1 / 96;
+      
+      // スケール係数を計算（ボードサイズをスライドサイズに合わせる）
+      const scaleX = slideWidthInches / (boardW * pxToInch);
+      const scaleY = slideHeightInches / (boardH * pxToInch);
+      const scale = Math.min(scaleX, scaleY);
+      
+      // 背景色と背景画像を取得
+      const bgStyle = window.getComputedStyle(workspaceBoard);
+      const bgColor = bgStyle.backgroundColor || currentBgColor;
+      
+      // 背景画像のURLを取得（優先順位: currentBgImage > templateImageMap > computedStyle）
+      let bgImageUrl = null;
+      if (currentBgImage) {
+        bgImageUrl = currentBgImage;
+        console.log('背景画像（currentBgImage）:', bgImageUrl);
+      } else if (currentTemplate !== 'none') {
+        const templateImageMap = {
+          'venn2': 'img/venn2.png',
+          'venn3': 'img/venn3.png',
+          'coordinate': 'img/coordinate.png',
+          'diamond': 'img/diamond.png',
+          'data-chart': 'img/data-chart.png',
+          'web6': 'img/web6.png',
+          'web0': 'img/web0.png',
+          'y-chart': 'img/y-chart.png',
+          'x-chart': 'img/x-chart.png',
+          'w-chart': 'img/w-chart.png',
+          'butterfly': 'img/butterfly.png',
+          'butterfly2': 'img/butterfly2.png',
+          'fishbone': 'img/fishbone.png',
+          'pmi': 'img/pmi.png',
+          'bear': 'img/bear.png',
+          'jellyfish': 'img/jellyfish.png',
+          'tree': 'img/tree.png',
+          'candy': 'img/candy.png',
+          'KWL': 'img/KWL.png',
+          'information-analysis-chart': 'img/information-analysis-chart.png',
+          'pyramid': 'img/pyramid.png',
+          'mountain': 'img/mountain.png',
+          'target': 'img/target.png',
+          'table': 'img/table.png'
+        };
+        if (templateImageMap[currentTemplate]) {
+          bgImageUrl = templateImageMap[currentTemplate];
+          console.log('背景画像（テンプレート）:', bgImageUrl, 'テンプレート:', currentTemplate);
+        }
+      }
+      
+      // 背景画像が取得できない場合は、computedStyleから取得を試みる
+      if (!bgImageUrl) {
+        const bgImage = bgStyle.backgroundImage;
+        if (bgImage && bgImage !== 'none') {
+          const match = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+          if (match && match[1]) {
+            bgImageUrl = match[1];
+            console.log('背景画像（computedStyle）:', bgImageUrl);
+          }
+        }
+      }
+      
+      console.log('最終的な背景画像URL:', bgImageUrl);
+      
+      // 背景色を設定（背景画像がない場合のみ）
+      if (!bgImageUrl && bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+        slide.background = { color: rgbToHex(bgColor) };
+      }
+      
+      // 背景画像を設定
+      if (bgImageUrl) {
+        try {
+          // data URLの場合はそのまま使用、それ以外はBase64に変換
+          let imageData;
+          if (bgImageUrl.startsWith('data:')) {
+            imageData = bgImageUrl;
+            console.log('背景画像（data URL）を使用');
+          } else {
+            // 相対パスの画像を読み込む際のタイムアウトを設定
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('画像の読み込みがタイムアウトしました')), 5000);
+            });
+            
+            try {
+              imageData = await Promise.race([
+                imageUrlToBase64(bgImageUrl),
+                timeoutPromise
+              ]);
+              console.log('背景画像をBase64に変換完了');
+            } catch (loadError) {
+              // 画像の読み込みに失敗した場合、相対パスを絶対パスに変換して再試行
+              if (!bgImageUrl.startsWith('http://') && !bgImageUrl.startsWith('https://') && !bgImageUrl.startsWith('file://')) {
+                // 現在のページのベースURLを使用して絶対パスに変換
+                const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+                const absoluteUrl = baseUrl + bgImageUrl;
+                console.log('相対パスを絶対パスに変換:', absoluteUrl);
+                try {
+                  imageData = await Promise.race([
+                    imageUrlToBase64(absoluteUrl),
+                    timeoutPromise
+                  ]);
+                  console.log('背景画像をBase64に変換完了（絶対パス）');
+                } catch (retryError) {
+                  throw loadError; // 元のエラーを再スロー
+                }
+              } else {
+                throw loadError;
+              }
+            }
+          }
+          
+          // Base64データの場合はdataプロパティを使用
+          slide.background = { 
+            data: imageData
+          };
+          console.log('背景画像をスライドに設定完了');
+        } catch (error) {
+          console.warn('背景画像の読み込みに失敗:', error);
+          console.error('背景画像URL:', bgImageUrl);
+          console.error('エラー詳細:', error);
+          // 背景画像の読み込みに失敗した場合は背景色を設定
+          if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+            slide.background = { color: rgbToHex(bgColor) };
+            console.log('背景色を設定しました:', rgbToHex(bgColor));
+          } else {
+            console.log('背景色も設定されていません');
+          }
+        }
+      } else {
+        // 背景画像がない場合は背景色を設定
+        console.log('背景画像なし、背景色を設定:', bgColor);
+        if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+          slide.background = { color: rgbToHex(bgColor) };
+        }
+      }
+      
+      // すべてのカードを取得
+      const cards = Array.from(workspaceBoard.querySelectorAll('.card'));
+      
+      // カードを位置順にソート（上から下、左から右）
+      cards.sort((a, b) => {
+        const topA = parseFloat(a.style.top) || 0;
+        const topB = parseFloat(b.style.top) || 0;
+        if (Math.abs(topA - topB) > 10) {
+          return topA - topB;
+        }
+        const leftA = parseFloat(a.style.left) || 0;
+        const leftB = parseFloat(b.style.left) || 0;
+        return leftA - leftB;
+      });
+      
+      // 各カードをスライドに追加
+      for (const card of cards) {
+        // カードの実際の位置を取得（offsetLeft/offsetTopはボード内の相対位置）
+        const cardLeft = card.offsetLeft;
+        const cardTop = card.offsetTop;
+        const cardWidth = card.offsetWidth;
+        const cardHeight = card.offsetHeight;
+        const cardType = card.dataset.type;
+        const cardColor = card.dataset.color || card.style.backgroundColor;
+        
+        // インチ単位に変換
+        const x = (cardLeft * pxToInch) * scale;
+        const y = (cardTop * pxToInch) * scale;
+        const w = (cardWidth * pxToInch) * scale;
+        const h = (cardHeight * pxToInch) * scale;
+        
+        if (cardType === 'text') {
+          // テキストカード - addText()メソッドでShapeとテキストを一体化、テキストを中央配置
+          const contentDiv = card.querySelector('.card-content');
+          const text = contentDiv ? contentDiv.textContent : '';
+          
+          if (text.trim()) {
+            // addText()でShapeとテキストを一体化、テキストを中央配置
+            slide.addText(text, {
+              shape: pptx.ShapeType.rect,
+              x: x,
+              y: y,
+              w: w,
+              h: h,
+              fill: { color: rgbToHex(cardColor) },
+              line: { color: '808080', width: 1 },
+              rectRadius: 0.05,
+              fontSize: Math.max(8, Math.min(24, Math.round(h * 12))),
+              align: 'center',
+              valign: 'middle',
+              color: '000000',
+              wrap: true,
+              margin: 0.05
+            });
+          }
+        } else if (cardType === 'image') {
+          // 画像カード - 画像を付箋の色で塗りつぶして一体化
+          const img = card.querySelector('img');
+          if (img && img.src) {
+            try {
+              // 画像を付箋の色で塗りつぶした画像に変換
+              const imageDataWithBg = await imageWithBackgroundColor(img.src, cardColor);
+              
+              // 付箋の色で塗りつぶした画像を追加
+              slide.addImage({
+                data: imageDataWithBg,
+                x: x,
+                y: y,
+                w: w,
+                h: h
+              });
+            } catch (error) {
+              console.warn('画像カードの読み込みに失敗:', error);
+              // 画像の読み込みに失敗した場合は背景色のカードのみ表示
+              slide.addShape(pptx.ShapeType.rect, {
+                x: x,
+                y: y,
+                w: w,
+                h: h,
+                fill: { color: rgbToHex(cardColor) },
+                line: { color: '808080', width: 1 },
+                rectRadius: 0.05
+              });
+            }
+          }
+        }
+      }
+      
+      // ファイルを保存
+      const fileName = 'cardmap-' + new Date().toISOString().slice(0, 10) + '.pptx';
+      await pptx.writeFile({ fileName: fileName });
+    }
+    
+    // RGB/RGBAカラーを16進数に変換
+    function rgbToHex(color) {
+      if (!color) return 'FFFFFF';
+      if (color.startsWith('#')) return color.substring(1);
+      
+      const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (rgbMatch) {
+        const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+        const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+        const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+        return (r + g + b).toUpperCase();
+      }
+      
+      return 'FFFFFF';
+    }
+    
+    // 画像URLをBase64に変換
+    function imageUrlToBase64(url) {
+      return new Promise((resolve, reject) => {
+        // data URLの場合はそのまま返す
+        if (url.startsWith('data:')) {
+          resolve(url);
+          return;
+        }
+        
+        // 外部URLまたはローカルファイル
+        const img = new Image();
+        
+        // file://プロトコルの場合はcrossOriginを設定しない（CORSエラーを避けるため）
+        if (!url.startsWith('file://')) {
+          img.crossOrigin = 'anonymous';
+        }
+        
+        img.onload = function() {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve(dataUrl);
+          } catch (error) {
+            reject(new Error('画像の変換に失敗しました: ' + error.message));
+          }
+        };
+        
+        img.onerror = function() {
+          // より詳細なエラーメッセージを提供
+          const errorMsg = url.startsWith('file://') 
+            ? 'ローカルファイルの読み込みはセキュリティ上の理由で制限されています。ローカルサーバーで実行するか、画像をBase64にエンコードしてください。'
+            : '画像の読み込みに失敗しました: ' + url;
+          reject(new Error(errorMsg));
+        };
+        
+        // 画像の読み込みを開始
+        try {
+          img.src = url;
+        } catch (error) {
+          reject(new Error('画像の読み込みを開始できませんでした: ' + error.message));
+        }
+      });
+    }
+    
+    // 画像を背景色で塗りつぶした画像に変換
+    function imageWithBackgroundColor(imageUrl, backgroundColor) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          // 背景色で塗りつぶす
+          ctx.fillStyle = backgroundColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // 画像を描画（透明部分は背景色が見える）
+          ctx.drawImage(img, 0, 0);
+          
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve(dataUrl);
+          } catch (error) {
+            reject(new Error('画像の変換に失敗しました: ' + error.message));
+          }
+        };
+        
+        img.onerror = function() {
+          reject(new Error('画像の読み込みに失敗しました: ' + imageUrl));
+        };
+        
+        // data URLの場合はそのまま使用
+        if (imageUrl.startsWith('data:')) {
+          img.src = imageUrl;
+        } else {
+          img.src = imageUrl;
+        }
+      });
+    }
     
     function closeScreenshotModal() {
       screenshotModal.classList.remove('open');
