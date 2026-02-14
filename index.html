@@ -398,14 +398,15 @@
       position: relative;
       z-index: 1;
     }
+    
+    /* ナビ中央・シンキングツールのみ右寄せ（フィールド右端と揃える） */
     .page-nav {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 0.5em;
+      gap: 0;
       flex-wrap: nowrap;
       margin-bottom: 0.5em;
-      padding: 0.4em 0;
+      padding: 0.4em 5px;
       overflow-x: auto;
       flex-shrink: 0;
       -webkit-overflow-scrolling: touch;
@@ -413,6 +414,138 @@
       z-index: 100;
       pointer-events: auto;
     }
+    .page-nav-spacer {
+      flex: 1;
+      min-width: 0;
+    }
+    .page-nav-center {
+      flex: 0 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5em;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
+    }
+    .page-nav .thinking-tool-dropdown-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
+      flex-shrink: 0;
+      z-index: 50;
+      min-width: 0;
+    }
+    .thinking-tool-nav-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #333;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .thinking-tool-trigger {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      font-size: 10px;
+      color: #333;
+      min-width: 0;
+      max-width: 100px;
+    }
+    .thinking-tool-trigger:hover {
+      background: #fff;
+      border-color: #4caf50;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+    }
+    .thinking-tool-trigger-thumb {
+      width: 24px;
+      height: 18px;
+      border-radius: 2px;
+      background-size: cover;
+      background-position: center;
+      background-color: #f5f5f5;
+      flex-shrink: 0;
+    }
+    .thinking-tool-trigger-label {
+      flex: 1;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thinking-tool-trigger::after {
+      content: '';
+      width: 0;
+      height: 0;
+      border-left: 3px solid transparent;
+      border-right: 3px solid transparent;
+      border-top: 3px solid #666;
+      flex-shrink: 0;
+    }
+    .thinking-tool-menu {
+      position: fixed;
+      z-index: 2000;
+      margin-top: 4px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      padding: 10px;
+      max-height: 70vh;
+      overflow-y: auto;
+      min-width: 280px;
+    }
+    .thinking-tool-menu[hidden] {
+      display: none !important;
+    }
+    .thinking-tool-menu.is-open {
+      display: block !important;
+    }
+    .thinking-tool-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .thinking-tool-menu-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      background: #f9f9f9;
+    }
+    .thinking-tool-menu-item:hover {
+      background: #e8f5e9;
+      border-color: #4caf50;
+    }
+    .thinking-tool-menu-item-thumb {
+      width: 100%;
+      aspect-ratio: 100/75;
+      border-radius: 4px;
+      background-size: cover;
+      background-position: center;
+      background-color: #fff;
+      margin-bottom: 4px;
+    }
+    .thinking-tool-menu-item-label {
+      font-size: 10px;
+      color: #333;
+      text-align: center;
+      line-height: 1.2;
+      word-break: break-all;
+    }
+    
     .page-nav .page-info {
       font-size: clamp(11px, 2vw, 13px);
       font-weight: 600;
@@ -1385,13 +1518,26 @@
     
     <div class="main-content">
       <div class="page-nav">
-        <button type="button" id="page-prev" class="btn-page">← 前</button>
-        <span class="page-info" id="page-info">1 / 5</span>
-        <button type="button" id="page-next" class="btn-page">次 →</button>
-        <button type="button" id="json-save" class="btn-page">保存</button>
-        <button type="button" id="json-load" class="btn-page">読み込み</button>
-        <button type="button" id="default-sticky-btn" class="btn-page" title="デフォルトの付箋を設定">⚙</button>
-        <input type="file" id="json-file-input" accept=".json,application/json" style="display:none">
+        <div class="page-nav-spacer" aria-hidden="true"></div>
+        <div class="page-nav-center">
+          <button type="button" id="page-prev" class="btn-page">← 前</button>
+          <span class="page-info" id="page-info">1 / 5</span>
+          <button type="button" id="page-next" class="btn-page">次 →</button>
+          <button type="button" id="json-save" class="btn-page">保存</button>
+          <button type="button" id="json-load" class="btn-page">読み込み</button>
+          <button type="button" id="default-sticky-btn" class="btn-page" title="デフォルトの付箋を設定">⚙</button>
+          <input type="file" id="json-file-input" accept=".json,application/json" style="display:none">
+        </div>
+        <div class="thinking-tool-dropdown-wrap">
+          <span class="thinking-tool-nav-label">シンキングツール</span>
+          <button type="button" class="thinking-tool-trigger" id="thinking-tool-trigger" aria-expanded="false" aria-haspopup="true" title="シンキングツールを選択">
+            <span class="thinking-tool-trigger-thumb" id="thinking-tool-trigger-thumb"></span>
+            <span class="thinking-tool-trigger-label" id="thinking-tool-trigger-label">なし</span>
+          </button>
+          <div class="thinking-tool-menu" id="thinking-tool-menu" hidden>
+            <div class="thinking-tool-menu-grid" id="thinking-tool-menu-grid"></div>
+          </div>
+        </div>
       </div>
       <div class="workspace-container mb-1">
         <div class="workspace-viewport" id="workspace-viewport">
@@ -2788,6 +2934,19 @@
       currentBoardScaleX = refWorkspaceWidth > 0 ? width / refWorkspaceWidth : 1;
       currentBoardScaleY = refWorkspaceHeight > 0 ? height / refWorkspaceHeight : 1;
       workspaceBoard.style.transform = `scale(${currentBoardScaleX}, ${currentBoardScaleY})`;
+      alignThinkingToolToField();
+    }
+    
+    function alignThinkingToolToField() {
+      var mainContent = document.querySelector('.main-content');
+      var ws = document.getElementById('workspace');
+      var wrap = document.querySelector('.thinking-tool-dropdown-wrap');
+      if (!mainContent || !ws || !wrap) return;
+      var mainRect = mainContent.getBoundingClientRect();
+      var wsRect = ws.getBoundingClientRect();
+      var navPaddingRight = 5;
+      var marginRightPx = (mainRect.right - navPaddingRight) - wsRect.right;
+      wrap.style.marginRight = Math.max(0, marginRightPx) + 'px';
     }
     
     // 初期化時とウィンドウリサイズ時にワークスペースのサイズを調整
@@ -2940,7 +3099,115 @@
       });
     });
     
-    // シンキングツールテンプレートの設定
+    // シンキングツール一覧（フィールドプルダウン・設定パネル同期用）
+    const THINKING_TEMPLATE_OPTIONS = [
+      { id: 'none', img: null, label: 'なし' },
+      { id: 'venn2', img: 'img/venn2.png', label: 'ベン図２' },
+      { id: 'venn3', img: 'img/venn3.png', label: 'ベン図３' },
+      { id: 'coordinate', img: 'img/coordinate.png', label: '座標軸' },
+      { id: 'diamond', img: 'img/diamond.png', label: 'ダイヤモンドランキング' },
+      { id: 'data-chart', img: 'img/data-chart.png', label: 'データチャート' },
+      { id: 'web6', img: 'img/web6.png', label: 'イメージマップ６' },
+      { id: 'web0', img: 'img/web0.png', label: 'イメージマップ０' },
+      { id: 'y-chart', img: 'img/y-chart.png', label: 'Yチャート' },
+      { id: 'x-chart', img: 'img/x-chart.png', label: 'Xチャート' },
+      { id: 'w-chart', img: 'img/w-chart.png', label: 'Wチャート' },
+      { id: 'butterfly', img: 'img/butterfly.png', label: 'バタフライチャート１' },
+      { id: 'butterfly2', img: 'img/butterfly2.png', label: 'バタフライチャート２' },
+      { id: 'fishbone', img: 'img/fishbone.png', label: '要因特性図（フィッシュボーン）' },
+      { id: 'pmi', img: 'img/pmi.png', label: 'PMI図' },
+      { id: 'bear', img: 'img/bear.png', label: 'クマ手チャート' },
+      { id: 'jellyfish', img: 'img/jellyfish.png', label: 'クラゲチャート' },
+      { id: 'tree', img: 'img/tree.png', label: 'ロジックツリー' },
+      { id: 'candy', img: 'img/candy.png', label: 'キャンディチャート' },
+      { id: 'kwl', img: 'img/KWL.png', label: 'KWL' },
+      { id: 'information-analysis-chart', img: 'img/information-analysis-chart.png', label: '情報分析チャート' },
+      { id: 'pyramid', img: 'img/pyramid.png', label: 'ピラミッドチャート' },
+      { id: 'mountain', img: 'img/mountain.png', label: 'プロット図' },
+      { id: 'target', img: 'img/target.png', label: '同心円チャート' },
+      { id: 'table', img: 'img/table.png', label: 'テーブル' }
+    ];
+    
+    function updateThinkingToolTriggerDisplay() {
+      const thumb = document.getElementById('thinking-tool-trigger-thumb');
+      const label = document.getElementById('thinking-tool-trigger-label');
+      if (!thumb || !label) return;
+      const opt = THINKING_TEMPLATE_OPTIONS.find(function(o) { return o.id === currentTemplate; });
+      if (opt) {
+        label.textContent = opt.label;
+        if (opt.img) {
+          thumb.style.backgroundImage = 'url(' + opt.img + ')';
+          thumb.style.backgroundColor = 'transparent';
+        } else {
+          thumb.style.backgroundImage = 'none';
+          thumb.style.backgroundColor = '#f0f0f0';
+        }
+      } else {
+        label.textContent = 'なし';
+        thumb.style.backgroundImage = 'none';
+        thumb.style.backgroundColor = '#f0f0f0';
+      }
+    }
+    
+    function buildThinkingToolDropdown() {
+      const grid = document.getElementById('thinking-tool-menu-grid');
+      const trigger = document.getElementById('thinking-tool-trigger');
+      const menu = document.getElementById('thinking-tool-menu');
+      if (!grid || !trigger || !menu) return;
+      document.body.appendChild(menu);
+      grid.innerHTML = '';
+      THINKING_TEMPLATE_OPTIONS.forEach(function(opt) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'thinking-tool-menu-item';
+        item.dataset.template = opt.id;
+        item.innerHTML = '<span class="thinking-tool-menu-item-thumb" style="' + (opt.img ? 'background-image:url(' + opt.img + ')' : '') + '"></span><span class="thinking-tool-menu-item-label">' + (opt.label || opt.id) + '</span>';
+        addClickOrTouchListener(item, function() {
+          currentTemplate = opt.id;
+          updateWorkspaceBackground();
+          document.querySelectorAll('.template-option').forEach(function(el) { el.classList.remove('active'); });
+          var panelOpt = document.querySelector('.template-option[data-template="' + currentTemplate + '"]');
+          if (panelOpt) panelOpt.classList.add('active');
+          updateThinkingToolTriggerDisplay();
+          closeMenu();
+        });
+        grid.appendChild(item);
+      });
+      function openMenu() {
+        var r = trigger.getBoundingClientRect();
+        menu.style.top = (r.bottom + 4) + 'px';
+        menu.style.left = 'auto';
+        menu.style.right = (window.innerWidth - r.right) + 'px';
+        menu.removeAttribute('hidden');
+        menu.classList.add('is-open');
+        menu.style.display = 'block';
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+      function closeMenu() {
+        menu.setAttribute('hidden', '');
+        menu.classList.remove('is-open');
+        menu.style.display = 'none';
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+      addClickOrTouchListener(trigger, function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (menu.classList.contains('is-open')) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
+      });
+      document.addEventListener('click', function closeThinkingMenu(e) {
+        if (!menu.classList.contains('is-open')) return;
+        if (trigger.contains(e.target) || menu.contains(e.target)) return;
+        closeMenu();
+      });
+      updateThinkingToolTriggerDisplay();
+    }
+    buildThinkingToolDropdown();
+    
+    // シンキングツールテンプレートの設定（背景設定パネル）
     document.querySelectorAll('.template-option').forEach(option => {
       addClickOrTouchListener(option, () => {
         // アクティブクラスを更新
@@ -2950,6 +3217,7 @@
         // テンプレートを設定
         currentTemplate = option.dataset.template;
         updateWorkspaceBackground();
+        updateThinkingToolTriggerDisplay();
       });
     });
     
@@ -3496,6 +3764,7 @@
       document.querySelectorAll('.template-option.active').forEach(el => el.classList.remove('active'));
       var templateEl = document.querySelector('.template-option[data-template="' + currentTemplate + '"]');
       if (templateEl) templateEl.classList.add('active');
+      if (typeof updateThinkingToolTriggerDisplay === 'function') updateThinkingToolTriggerDisplay();
       
       var idToCard = {};
       cardsData.forEach(function(cardData) {
