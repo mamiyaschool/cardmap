@@ -97,58 +97,34 @@
       box-shadow: 0 0 0 3px #4caf50;
     }
     
-    /* カード追加時：重力加速度で落下し、下で2回バウンド */
-    /* 落下区間は t^2 に比例（等加速度）になるようキーフレームを配置 */
-    @keyframes card-drop-in {
-      0% {
-        top: -220px;
-      }
-      5% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.01);
-      }
-      10% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.04);
-      }
-      15% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.09);
-      }
-      20% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.16);
-      }
-      25% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.25);
-      }
-      30% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.36);
-      }
-      35% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.49);
-      }
-      40% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.64);
-      }
-      45% {
-        top: calc(-220px + (232px + var(--final-top)) * 0.81);
-      }
-      50% {
-        top: calc(var(--final-top) + 12px);
-      }
-      62% {
-        top: calc(var(--final-top) - 26px);
-      }
-      74% {
-        top: calc(var(--final-top) + 4px);
-      }
-      84% {
-        top: calc(var(--final-top) - 10px);
-      }
-      100% {
-        top: var(--final-top);
-      }
+    /* 落下：自然落下（等加速度・linearで t^2 の動き） */
+    @keyframes card-drop-in-fall {
+      0% { top: -220px; transform: translateX(0); }
+      11.11% { top: calc(-220px + (232px + var(--final-top)) * 0.01); transform: translateX(0); }
+      22.22% { top: calc(-220px + (232px + var(--final-top)) * 0.04); transform: translateX(0); }
+      33.33% { top: calc(-220px + (232px + var(--final-top)) * 0.09); transform: translateX(0); }
+      44.44% { top: calc(-220px + (232px + var(--final-top)) * 0.16); transform: translateX(0); }
+      55.55% { top: calc(-220px + (232px + var(--final-top)) * 0.25); transform: translateX(0); }
+      66.66% { top: calc(-220px + (232px + var(--final-top)) * 0.36); transform: translateX(0); }
+      77.77% { top: calc(-220px + (232px + var(--final-top)) * 0.49); transform: translateX(0); }
+      88.88% { top: calc(-220px + (232px + var(--final-top)) * 0.64); transform: translateX(0); }
+      100% { top: calc(-220px + (232px + var(--final-top)) * 0.81); transform: translateX(0); }
+    }
+    
+    /* バウンド：ポヨンとやわらかく（ease-out） */
+    @keyframes card-drop-in-bounce {
+      0% { top: calc(-220px + (232px + var(--final-top)) * 0.81); transform: translateX(0); }
+      5.5% { top: calc(var(--final-top) + 10px); transform: translateX(3px); }
+      20% { top: calc(var(--final-top) - 28px); transform: translateX(6px); }
+      38% { top: calc(var(--final-top) + 4px); transform: translateX(-4px); }
+      52% { top: calc(var(--final-top) - 4px); transform: translateX(-6px); }
+      72%, 100% { top: var(--final-top); transform: translateX(-6px); }
     }
     
     .card.card-drop-in {
-      animation: card-drop-in 1.15s linear forwards;
+      animation:
+        card-drop-in-fall 0.55s linear forwards,
+        card-drop-in-bounce 1.05s 0.55s ease-out forwards;
     }
     
     /* 選択中のフローティング＋回転系のふらつき */
@@ -195,6 +171,15 @@
       white-space: pre-wrap;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+    }
+    
+    .card-content[contenteditable="true"] {
+      cursor: text;
+      outline: none;
+    }
+    
+    .card-content[contenteditable="true"]:focus {
+      outline: none;
     }
     
     .delete-btn {
@@ -3029,14 +3014,15 @@
       
       // 優先順位: 1. 画像設定パネルの画像 2. シンキングツールのURL画像 3. シンキングツールの画像テンプレート
       // 縦横のサイズをフィールドに合わせる（100% 100%で伸縮）
+      // 縦横比は元の画像のまま、横幅だけフィールドに合わせる
       if (currentBgImage) {
         workspaceBoard.style.backgroundImage = `url(${currentBgImage})`;
-        workspaceBoard.style.backgroundSize = '100% 100%';
+        workspaceBoard.style.backgroundSize = '100% auto';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
       } else if (currentTemplate !== 'none' && templateImageMap[currentTemplate]) {
         workspaceBoard.style.backgroundImage = `url(${templateImageMap[currentTemplate]})`;
-        workspaceBoard.style.backgroundSize = '100% 100%';
+        workspaceBoard.style.backgroundSize = '100% auto';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
       } else {
@@ -3179,6 +3165,11 @@
         const sizeIndex = Math.max(0, Math.min(defaultTextSizeIndex, textSizes.length - 1));
         contentDiv.classList.add(textSizes[sizeIndex].name);
         card.dataset.textSizeIndex = String(sizeIndex);
+        contentDiv.contentEditable = 'true';
+        contentDiv.setAttribute('contenteditable', 'true');
+        contentDiv.addEventListener('blur', function saveCardContent() {
+          saveCurrentPageToState();
+        });
       }
       
       card.appendChild(contentDiv);
@@ -3305,10 +3296,24 @@
       saveCurrentPageToState();
       
       card.addEventListener('animationend', function onDropEnd(e) {
-        if (e.animationName !== 'card-drop-in') return;
+        if (e.animationName !== 'card-drop-in-bounce') return;
         card.removeEventListener('animationend', onDropEnd);
         card.classList.remove('card-drop-in');
         card.style.top = top + 'px';
+        // バウンドで横にずれた分を left に反映して、その座標で止める
+        var style = getComputedStyle(card);
+        var t = style.transform;
+        var dx = 0;
+        if (t && t !== 'none') {
+          var m = t.match(/matrix\(([^)]+)\)/);
+          if (m) {
+            var parts = m[1].split(',');
+            if (parts.length >= 6) dx = parseFloat(parts[4].trim()) || 0;
+          }
+        }
+        var currentLeft = parseInt(card.style.left, 10) || 0;
+        card.style.left = (currentLeft + dx) + 'px';
+        card.style.transform = '';
         updateConnections();
         saveCurrentPageToState();
       });
@@ -3382,6 +3387,11 @@
         const sizeIndex = Math.max(0, Math.min(textSizes.length - 1, parseInt(data.textSizeIndex, 10) || 2));
         contentDiv.classList.add(textSizes[sizeIndex].name);
         card.dataset.textSizeIndex = String(sizeIndex);
+        contentDiv.contentEditable = 'true';
+        contentDiv.setAttribute('contenteditable', 'true');
+        contentDiv.addEventListener('blur', function saveCardContent() {
+          saveCurrentPageToState();
+        });
       }
       card.appendChild(contentDiv);
       
@@ -3859,6 +3869,26 @@
     // カードのドラッグ開始（マウス）：移動したらドラッグ、しなければクリック＝接続
     const DRAG_THRESHOLD = 5;
     
+    // 指定した画面座標にキャレットを合わせる（テキスト編集時のクリック位置）
+    function setCaretAtPoint(container, clientX, clientY) {
+      var range = null;
+      if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(clientX, clientY);
+      } else if (document.caretPositionFromPoint) {
+        var pos = document.caretPositionFromPoint(clientX, clientY);
+        if (pos && pos.offsetNode) {
+          range = document.createRange();
+          range.setStart(pos.offsetNode, pos.offset);
+          range.collapse(true);
+        }
+      }
+      if (range && container.contains(range.startContainer)) {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    
     function startDragCard(e) {
       // 右クリックは無視
       if (e.button === 2) return;
@@ -3874,6 +3904,7 @@
       e.preventDefault();
       
       const card = this;
+      const startTarget = e.target;
       const startX = e.clientX;
       const startY = e.clientY;
       let hasMoved = false;
@@ -3890,6 +3921,24 @@
           hasMoved = true;
           selectCard(card, e);
           card.classList.add('dragging');
+          if (card.classList.contains('card-drop-in')) {
+            card.classList.remove('card-drop-in');
+            var curTop = parseInt(getComputedStyle(card).top, 10);
+            if (!isNaN(curTop)) card.style.top = curTop + 'px';
+            var transformStr = getComputedStyle(card).transform;
+            if (transformStr && transformStr !== 'none') {
+              var matrixMatch = transformStr.match(/matrix\(([^)]+)\)/);
+              if (matrixMatch) {
+                var parts = matrixMatch[1].split(',');
+                if (parts.length >= 6) {
+                  var translateX = parseFloat(parts[4].trim()) || 0;
+                  var curLeft = parseInt(card.style.left, 10) || 0;
+                  card.style.left = (curLeft + translateX) + 'px';
+                  card.style.transform = '';
+                }
+              }
+            }
+          }
         }
         if (!hasMoved) return;
         const x = (e.clientX - workspaceRect.left) / currentZoom / currentBoardScaleX - offsetX;
@@ -3907,6 +3956,13 @@
         card.classList.remove('dragging');
         if (!hasMoved) {
           handleCardSelect(card);
+          if (card.dataset.type === 'text' && startTarget.closest && startTarget.closest('.card-content') && !connectingCard) {
+            var contentEl = card.querySelector('.card-content');
+            if (contentEl) {
+              contentEl.focus();
+              setCaretAtPoint(contentEl, startX, startY);
+            }
+          }
         } else {
           selectCard(card, e);
           saveCurrentPageToState();
@@ -3929,6 +3985,7 @@
       e.preventDefault();
       
       const card = this;
+      const startTarget = e.target;
       const touch = e.touches[0];
       const startX = touch.clientX;
       const startY = touch.clientY;
@@ -3947,6 +4004,24 @@
           hasMoved = true;
           selectCard(card, e);
           card.classList.add('dragging');
+          if (card.classList.contains('card-drop-in')) {
+            card.classList.remove('card-drop-in');
+            var curTop = parseInt(getComputedStyle(card).top, 10);
+            if (!isNaN(curTop)) card.style.top = curTop + 'px';
+            var transformStr = getComputedStyle(card).transform;
+            if (transformStr && transformStr !== 'none') {
+              var matrixMatch = transformStr.match(/matrix\(([^)]+)\)/);
+              if (matrixMatch) {
+                var parts = matrixMatch[1].split(',');
+                if (parts.length >= 6) {
+                  var translateX = parseFloat(parts[4].trim()) || 0;
+                  var curLeft = parseInt(card.style.left, 10) || 0;
+                  card.style.left = (curLeft + translateX) + 'px';
+                  card.style.transform = '';
+                }
+              }
+            }
+          }
         }
         if (!hasMoved) return;
         const x = (t.clientX - workspaceRect.left) / currentZoom / currentBoardScaleX - offsetX;
@@ -3964,6 +4039,13 @@
         card.classList.remove('dragging');
         if (!hasMoved) {
           handleCardSelect(card);
+          if (card.dataset.type === 'text' && startTarget.closest && startTarget.closest('.card-content') && !connectingCard) {
+            var contentEl = card.querySelector('.card-content');
+            if (contentEl) {
+              contentEl.focus();
+              setCaretAtPoint(contentEl, startX, startY);
+            }
+          }
         } else {
           selectCard(card, e);
           saveCurrentPageToState();
