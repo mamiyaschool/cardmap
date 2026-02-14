@@ -2830,6 +2830,17 @@
     function createEmptyPage() {
       return { cards: [], connections: [], background: { color: '#ffffff', template: 'none', image: null } };
     }
+    // 読み込み用：ページに background が無い・欠けている場合にデフォルトを補う
+    function normalizePageBackground(page) {
+      if (!page || typeof page !== 'object') return createEmptyPage();
+      var bg = (page.background && typeof page.background === 'object') ? page.background : {};
+      page.background = {
+        color: (bg.color != null && String(bg.color).trim() !== '') ? String(bg.color).trim() : '#ffffff',
+        template: (bg.template != null && String(bg.template).trim() !== '') ? String(bg.template).trim() : 'none',
+        image: (bg.image != null && bg.image !== '') ? bg.image : null
+      };
+      return page;
+    }
     let pageStates = [];
     for (var i = 0; i < TOTAL_SLIDES; i++) pageStates.push(createEmptyPage());
     let currentPageIndex = 0;
@@ -3250,6 +3261,7 @@
     
     // ワークスペースの背景を更新（ボードに設定して拡縮時に一緒に縮小）
     function updateWorkspaceBackground() {
+      if (!workspaceBoard) return;
       workspaceBoard.style.backgroundColor = currentBgColor;
       
       // テンプレート名から画像ファイル名へのマッピング
@@ -3283,13 +3295,21 @@
       // 優先順位: 1. 画像設定パネルの画像 2. シンキングツールのURL画像 3. シンキングツールの画像テンプレート
       // 縦横のサイズをフィールドに合わせる（100% 100%で伸縮）
       // 縦横比は元の画像のまま、横幅だけフィールドに合わせる
+      var templateImg = null;
+      if (currentTemplate !== 'none') {
+        templateImg = templateImageMap[currentTemplate];
+        if (!templateImg && typeof currentTemplate === 'string') {
+          var key = Object.keys(templateImageMap).find(function(k) { return k.toLowerCase() === currentTemplate.toLowerCase(); });
+          if (key) templateImg = templateImageMap[key];
+        }
+      }
       if (currentBgImage) {
         workspaceBoard.style.backgroundImage = `url(${currentBgImage})`;
         workspaceBoard.style.backgroundSize = '100% auto';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
-      } else if (currentTemplate !== 'none' && templateImageMap[currentTemplate]) {
-        workspaceBoard.style.backgroundImage = `url(${templateImageMap[currentTemplate]})`;
+      } else if (templateImg) {
+        workspaceBoard.style.backgroundImage = 'url(' + templateImg + ')';
         workspaceBoard.style.backgroundSize = '100% auto';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
@@ -3744,6 +3764,13 @@
       if (!data || typeof data !== 'object') data = { cards: [], connections: [], background: {} };
       var cardsData = Array.isArray(data.cards) ? data.cards : [];
       var connsData = Array.isArray(data.connections) ? data.connections : [];
+      // 最初に背景だけ復元（後続のDOM操作より先に適用する）
+      var bg = (data.background && typeof data.background === 'object') ? data.background : {};
+      currentBgColor = (bg.color != null && String(bg.color).trim() !== '') ? String(bg.color).trim() : '#ffffff';
+      var rawTemplate = (bg.template != null && bg.template !== '') ? String(bg.template).trim() : 'none';
+      currentTemplate = (rawTemplate === '') ? 'none' : rawTemplate;
+      currentBgImage = (bg.image != null && bg.image !== '') ? bg.image : null;
+      updateWorkspaceBackground();
       _loadingPage = true;
       try {
       connections.forEach(c => c.line.remove());
@@ -3753,17 +3780,27 @@
       selectedCard = null;
       connectingCard = null;
       workspace.classList.remove('connecting-from');
-      
-      currentBgColor = (data.background && data.background.color) || '#ffffff';
-      currentTemplate = (data.background && data.background.template) || 'none';
-      currentBgImage = (data.background && data.background.image) || null;
-      updateWorkspaceBackground();
+      // 背景色タブの選択状態を更新
       document.querySelectorAll('.color-option.active').forEach(el => el.classList.remove('active'));
       var colorEl = document.querySelector('.color-option[data-color="' + currentBgColor + '"]');
       if (colorEl) colorEl.classList.add('active');
+      // シンキングツール（テンプレート）の選択状態を更新
       document.querySelectorAll('.template-option.active').forEach(el => el.classList.remove('active'));
       var templateEl = document.querySelector('.template-option[data-template="' + currentTemplate + '"]');
       if (templateEl) templateEl.classList.add('active');
+      // 画像設定パネル：読み込んだ背景画像があればプレビュー表示、なければ非表示
+      var previewPanel = document.getElementById('bg-image-preview');
+      var thumb = document.getElementById('preview-thumbnail');
+      var fileInput = document.getElementById('bg-image-upload');
+      if (currentBgImage) {
+        if (previewPanel) previewPanel.classList.remove('hidden');
+        if (thumb) thumb.style.backgroundImage = 'url(' + currentBgImage + ')';
+        if (fileInput) fileInput.value = '';
+      } else {
+        if (previewPanel) previewPanel.classList.add('hidden');
+        if (thumb) thumb.style.backgroundImage = '';
+        if (fileInput) fileInput.value = '';
+      }
       if (typeof updateThinkingToolTriggerDisplay === 'function') updateThinkingToolTriggerDisplay();
       
       var idToCard = {};
@@ -3779,15 +3816,25 @@
         if (fromCard && toCard) createConnection(fromCard, toCard);
       });
       updateModeText();
+      updateWorkspaceBackground();
+      requestAnimationFrame(function() { updateWorkspaceBackground(); });
+      setTimeout(function() { updateWorkspaceBackground(); }, 0);
       } finally { _loadingPage = false; }
     }
     
     var _loadingPage = false;
     function clonePageData(raw) {
       if (!raw) return { cards: [], connections: [], background: { color: '#ffffff', template: 'none', image: null } };
-      var c = { cards: [], connections: [], background: raw.background || {} };
-      c.cards = (raw.cards || []).map(function(x) { return { id: x.id, type: x.type, content: x.content, left: x.left, top: x.top, width: x.width, height: x.height, color: x.color, textSizeIndex: x.textSizeIndex }; });
-      c.connections = (raw.connections || []).map(function(r) { return { fromId: r.fromId, toId: r.toId }; });
+      var bg = (raw.background && typeof raw.background === 'object') ? raw.background : {};
+      var c = {
+        cards: (raw.cards || []).map(function(x) { return { id: x.id, type: x.type, content: x.content, left: x.left, top: x.top, width: x.width, height: x.height, color: x.color, textSizeIndex: x.textSizeIndex }; }),
+        connections: (raw.connections || []).map(function(r) { return { fromId: r.fromId, toId: r.toId }; }),
+        background: {
+          color: (bg.color != null && String(bg.color).trim() !== '') ? String(bg.color).trim() : '#ffffff',
+          template: (bg.template != null && String(bg.template).trim() !== '') ? String(bg.template).trim() : 'none',
+          image: (bg.image != null && bg.image !== '') ? bg.image : null
+        }
+      };
       return c;
     }
     function saveCurrentPageToState() {
@@ -3950,6 +3997,7 @@
               alert('読み込むデータがありません。');
               return;
             }
+            normalizePageBackground(onePage);
             var currentPage = clonePageData(pageStates[currentPageIndex]);
             var loadedPage = clonePageData(onePage);
             var idMap = {};
@@ -3964,6 +4012,11 @@
             });
             currentPage.cards = (currentPage.cards || []).concat(loadedPage.cards || []);
             currentPage.connections = (currentPage.connections || []).concat(loadedPage.connections || []);
+            currentPage.background = {
+              color: (loadedPage.background.color != null && String(loadedPage.background.color).trim() !== '') ? String(loadedPage.background.color).trim() : '#ffffff',
+              template: (loadedPage.background.template != null && String(loadedPage.background.template).trim() !== '') ? String(loadedPage.background.template).trim() : 'none',
+              image: (loadedPage.background.image != null && loadedPage.background.image !== '') ? loadedPage.background.image : null
+            };
             pageStates[currentPageIndex] = currentPage;
             loadPageData(currentPage);
             updatePageUI();
@@ -3975,10 +4028,11 @@
           if (data.pages && Array.isArray(data.pages)) {
             pageStates = [];
             for (var i = 0; i < TOTAL_SLIDES; i++) {
-              pageStates.push(i < data.pages.length ? data.pages[i] : createEmptyPage());
+              var page = i < data.pages.length ? data.pages[i] : createEmptyPage();
+              pageStates.push(normalizePageBackground(page));
             }
           } else if (data.cards || data.connections) {
-            pageStates = [data];
+            pageStates = [normalizePageBackground(data)];
             for (var j = 1; j < TOTAL_SLIDES; j++) pageStates.push(createEmptyPage());
           } else {
             alert('JSONの形式が正しくありません。');
