@@ -22,10 +22,16 @@
       overflow: auto;
       min-height: 0;
       display: flex;
-      justify-content: center;
-      align-items: center;
+      flex-direction: column;
       padding: 5px;
       position: relative;
+    }
+    .workspace-container .workspace-viewport {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 0;
     }
     
     .workspace {
@@ -230,7 +236,6 @@
       opacity: 0;
       transition: opacity 0.2s;
     }
-    
     .card:hover .resize-handle,
     .card.selected .resize-handle {
       opacity: 1;
@@ -379,6 +384,90 @@
     .workspace.connecting-from .card {
       cursor: pointer;
     }
+    
+    /* ページスライド用ビューポート */
+    .workspace-viewport {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+    .workspace-viewport .workspace {
+      transition: transform 0.35s ease-out;
+    }
+    .workspace-ghost {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: white;
+      border-radius: 8px;
+    }
+    .workspace-viewport .workspace-container-inner {
+      position: relative;
+      z-index: 1;
+    }
+    .page-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5em;
+      flex-wrap: nowrap;
+      margin-bottom: 0.5em;
+      padding: 0.4em 0;
+      overflow-x: auto;
+      flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      z-index: 100;
+      pointer-events: auto;
+    }
+    .page-nav .page-info {
+      font-size: clamp(11px, 2vw, 13px);
+      font-weight: 600;
+      color: #2e7d32;
+      background: #e8f5e9;
+      padding: 0.35em 0.65em;
+      border-radius: 6px;
+      flex-shrink: 0;
+      border: 1px solid #a5d6a7;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .page-nav .btn-page {
+      padding: 0.4em 0.75em;
+      font-size: clamp(11px, 2vw, 13px);
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid rgba(0,0,0,0.08);
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .page-nav .btn-page:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+    .page-nav .btn-page:active {
+      transform: translateY(0);
+    }
+    .page-nav .btn-page:disabled,
+    .page-nav .btn-page.btn-page-inactive {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .page-nav .btn-page#page-prev { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .page-nav .btn-page#page-next { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .page-nav .btn-page#json-save { background: #ffe0b2; color: #e65100; border-color: #ffcc80; }
+    .page-nav .btn-page#json-load { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
     
     .toolbar {
       background-color: #2e7d32;
@@ -572,6 +661,35 @@
       background-color: rgba(255, 255, 255, 1) !important;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.15);
       transform: translateY(-1px);
+    }
+    
+    .default-preview-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .default-preview-label {
+      margin: 0;
+      font-size: 12px;
+      color: #37474f;
+      text-align: center;
+    }
+    .default-preview-card-wrap {
+      position: relative;
+      min-width: 120px;
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .default-preview-card-wrap .card {
+      position: relative;
+      margin: 0;
+      flex-shrink: 0;
+    }
+    .default-preview-card-wrap .resize-handle {
+      opacity: 1;
     }
     
     .input-tabs {
@@ -832,28 +950,36 @@
       transition: transform 0.2s, box-shadow 0.2s;
     }
     .next-card-color-option:hover {
-      transform: scale(1.15);
+      transform: scale(1.1);
     }
     .next-card-color-option.active {
       border-color: rgba(255,255,255,0.9);
       box-shadow: 0 0 0 2px #2e7d32;
     }
-    /* カードの色を均等に2段配置（8列×2行） */
+    /* カードの色を均等に2段配置（8列×2行）。ホバー時にはみ出さないよう幅とオーバーフローを調整 */
     #text-panel-card-colors,
     #drawing-panel-card-colors {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
       gap: 6px;
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      padding: 2px 0;
+      box-sizing: border-box;
     }
     /* 円形に（楕円にならないよう幅高さを同じに） */
     #text-panel-card-colors .next-card-color-option,
     #drawing-panel-card-colors .next-card-color-option {
-      width: 22px;
-      height: 22px;
-      min-width: 22px;
-      min-height: 22px;
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      min-height: 20px;
+      max-width: 20px;
+      max-height: 20px;
       justify-self: center;
+      box-sizing: border-box;
     }
     
     /* ズームコントロール - ワークスペース外に移動 */
@@ -1069,6 +1195,116 @@
       font-size: 0.85em;
       font-family: monospace;
     }
+    /* デフォルトの付箋設定モーダル */
+    .default-sticky-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.45);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .default-sticky-modal.open {
+      display: flex;
+    }
+    .default-sticky-modal-dialog {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .page-nav .btn-page#default-sticky-btn {
+      padding: 6px 10px;
+      min-width: 36px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-color: #a5d6a7;
+    }
+    .page-nav .btn-page#default-sticky-btn:hover {
+      background: #c8e6c9;
+    }
+    
+    /* 保存範囲選択モーダル */
+    .save-choice-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.45);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .save-choice-modal.open {
+      display: flex;
+    }
+    .load-choice-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.45);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .load-choice-modal.open {
+      display: flex;
+    }
+    .save-choice-dialog {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 320px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .save-choice-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .save-choice-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .save-choice-btn {
+      padding: 12px 16px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.1);
+      background: #fff;
+      color: #e65100;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .save-choice-btn:hover {
+      background: #ffe0b2;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .save-choice-btn:first-of-type { background: #fff3e0; border-color: #ffcc80; }
+    .save-choice-btn:last-of-type { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .save-choice-btn:last-of-type:hover { background: #bbdefb; }
+
     /* スクリーンショットプレビュー用モーダル */
     #screenshot-preview-modal {
       display: none;
@@ -1163,9 +1399,23 @@
     </header>
     
     <div class="main-content">
+      <div class="page-nav">
+        <button type="button" id="page-prev" class="btn-page">← 前</button>
+        <span class="page-info" id="page-info">1 / 5</span>
+        <button type="button" id="page-next" class="btn-page">次 →</button>
+        <button type="button" id="json-save" class="btn-page">保存</button>
+        <button type="button" id="json-load" class="btn-page">読み込み</button>
+        <button type="button" id="default-sticky-btn" class="btn-page" title="デフォルトの付箋を設定">⚙</button>
+        <input type="file" id="json-file-input" accept=".json,application/json" style="display:none">
+      </div>
       <div class="workspace-container mb-1">
-        <div id="workspace" class="workspace">
-          <div id="workspace-board" class="workspace-board"></div>
+        <div class="workspace-viewport" id="workspace-viewport">
+          <div class="workspace-ghost" id="workspace-ghost"></div>
+          <div class="workspace-container-inner">
+            <div id="workspace" class="workspace">
+              <div id="workspace-board" class="workspace-board"></div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -1257,6 +1507,19 @@
               <button id="save-pptx-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
                 PowerPoint出力
               </button>
+            </div>
+            <div class="pptx-scope-choice flex flex-col gap-2 w-full max-w-xs mt-1">
+              <span class="text-xs text-gray-600">PowerPointの出力範囲</span>
+              <div class="flex gap-4 justify-center">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="pptx-scope" value="current" checked class="pptx-scope-radio">
+                  <span class="text-sm">現在のページのみ</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="pptx-scope" value="all" class="pptx-scope-radio">
+                  <span class="text-sm">5枚全て</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -1420,10 +1683,43 @@
             </div>
           </div>
           </div>
+          </div>
         </div>
       </div>
-      </div>
     </div>
+    </div>
+  </div>
+  
+  <!-- デフォルトの付箋設定モーダル -->
+  <div id="default-sticky-modal" class="default-sticky-modal" aria-hidden="true">
+    <div class="default-sticky-modal-dialog">
+      <p class="default-preview-label">ここで設定した大きさ・文字サイズが次の付箋のデフォルトになります</p>
+      <div id="default-preview-card-wrap" class="default-preview-card-wrap"></div>
+      <button type="button" id="default-sticky-modal-close" class="btn bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">閉じる</button>
+    </div>
+  </div>
+  
+  <!-- 保存範囲選択モーダル（保存ボタン押下後に表示） -->
+  <div id="save-choice-modal" aria-hidden="true" class="save-choice-modal">
+    <div class="save-choice-dialog">
+      <p class="save-choice-title">どれを保存しますか？</p>
+      <div class="save-choice-buttons">
+        <button type="button" id="save-choice-current" class="btn save-choice-btn">現在の1枚だけ保存</button>
+        <button type="button" id="save-choice-all" class="btn save-choice-btn">5枚すべて保存</button>
+      </div>
+      <button type="button" id="save-choice-cancel" class="btn bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">キャンセル</button>
+    </div>
+  </div>
+  
+  <!-- 読み込み方法選択モーダル（読み込みボタン押下後に表示） -->
+  <div id="load-choice-modal" aria-hidden="true" class="load-choice-modal">
+    <div class="save-choice-dialog">
+      <p class="save-choice-title">どのように読み込みますか？</p>
+      <div class="save-choice-buttons">
+        <button type="button" id="load-choice-append" class="btn save-choice-btn">現在のページに1枚分を追加</button>
+        <button type="button" id="load-choice-replace" class="btn save-choice-btn">新規で5枚のスライドを読み込む</button>
+      </div>
+      <button type="button" id="load-choice-cancel" class="btn bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">キャンセル</button>
     </div>
   </div>
   
@@ -1646,6 +1942,144 @@
       });
     });
     
+    // デフォルト付箋プレビュー（読み込みボタン右の⚙でモーダル表示・フィールドの基準サイズに合わせて表示）
+    const defaultPreviewWrap = document.getElementById('default-preview-card-wrap');
+    const defaultStickyModal = document.getElementById('default-sticky-modal');
+    
+    function openDefaultStickyModal() {
+      if (defaultStickyModal && defaultPreviewWrap) {
+        defaultPreviewWrap.innerHTML = '';
+        buildDefaultPreviewCard();
+        defaultStickyModal.classList.add('open');
+        defaultStickyModal.setAttribute('aria-hidden', 'false');
+      }
+    }
+    function closeDefaultStickyModal() {
+      if (defaultStickyModal) {
+        defaultStickyModal.classList.remove('open');
+        defaultStickyModal.setAttribute('aria-hidden', 'true');
+      }
+    }
+    addClickOrTouchListener(document.getElementById('default-sticky-btn'), openDefaultStickyModal);
+    addClickOrTouchListener(document.getElementById('default-sticky-modal-close'), closeDefaultStickyModal);
+    if (defaultStickyModal) {
+      defaultStickyModal.addEventListener('click', function(e) {
+        if (e.target === defaultStickyModal) closeDefaultStickyModal();
+      });
+    }
+    
+    function buildDefaultPreviewCard() {
+      if (!defaultPreviewWrap) return;
+      defaultPreviewWrap.innerHTML = '';
+      const boardW = workspaceBoard.offsetWidth || refWorkspaceWidth || 400;
+      const boardH = workspaceBoard.offsetHeight || refWorkspaceHeight || 400;
+      const baseStickyPx = getStickySidePx(boardW, boardH);
+      const stickyPx = Math.max(32, Math.min(400, Math.round(baseStickyPx * defaultStickyScale)));
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.defaultPreview = '1';
+      card.dataset.type = 'text';
+      card.dataset.textSizeIndex = String(defaultTextSizeIndex);
+      card.style.backgroundColor = nextCardColor;
+      card.style.width = stickyPx + 'px';
+      card.style.height = stickyPx + 'px';
+      card.style.position = 'relative';
+      card.style.left = '0';
+      card.style.top = '0';
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'card-content';
+      contentDiv.textContent = '文字の大きさ';
+      contentDiv.style.whiteSpace = 'pre-wrap';
+      const sizeIndex = Math.max(0, Math.min(defaultTextSizeIndex, textSizes.length - 1));
+      contentDiv.classList.add(textSizes[sizeIndex].name);
+      card.appendChild(contentDiv);
+      
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'resize-handle';
+      card.appendChild(resizeHandle);
+      
+      const cardControls = document.createElement('div');
+      cardControls.className = 'card-controls';
+      cardControls.style.opacity = '1';
+      const decreaseBtn = document.createElement('div');
+      decreaseBtn.className = 'card-control-btn';
+      decreaseBtn.innerHTML = '−';
+      addClickOrTouchListener(decreaseBtn, (e) => { e.stopPropagation(); changeTextSize(card, -1); });
+      cardControls.appendChild(decreaseBtn);
+      const resetBtn = document.createElement('div');
+      resetBtn.className = 'card-control-btn active';
+      resetBtn.innerHTML = '標準';
+      addClickOrTouchListener(resetBtn, (e) => { e.stopPropagation(); resetTextSize(card); });
+      cardControls.appendChild(resetBtn);
+      const increaseBtn = document.createElement('div');
+      increaseBtn.className = 'card-control-btn';
+      increaseBtn.innerHTML = '＋';
+      addClickOrTouchListener(increaseBtn, (e) => { e.stopPropagation(); changeTextSize(card, 1); });
+      cardControls.appendChild(increaseBtn);
+      card.appendChild(cardControls);
+      
+      function startDefaultPreviewResize(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const startW = card.offsetWidth;
+        const startH = card.offsetHeight;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        function move(ev) {
+          const basePx = getStickySidePx(workspaceBoard.offsetWidth || 400, workspaceBoard.offsetHeight || 400);
+          const minPx = 32;
+          const maxPx = Math.min(400, Math.round(basePx * 2));
+          const w = Math.max(minPx, Math.min(maxPx, startW + (ev.clientX - startX)));
+          const h = Math.max(minPx, Math.min(maxPx, startH + (ev.clientY - startY)));
+          const s = Math.min(w, h);
+          card.style.width = s + 'px';
+          card.style.height = s + 'px';
+        }
+        function stop() {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', stop);
+          const basePx = getStickySidePx(workspaceBoard.offsetWidth || 400, workspaceBoard.offsetHeight || 400);
+          if (basePx > 0) defaultStickyScale = Math.max(0.5, Math.min(2, card.offsetWidth / basePx));
+        }
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', stop);
+      }
+      function startDefaultPreviewResizeTouch(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const touch = e.touches[0];
+        const startW = card.offsetWidth;
+        const startH = card.offsetHeight;
+        const startX = touch.clientX;
+        const startY = touch.clientY;
+        function move(ev) {
+          const t = ev.touches[0];
+          const basePx = getStickySidePx(workspaceBoard.offsetWidth || 400, workspaceBoard.offsetHeight || 400);
+          const minPx = 32;
+          const maxPx = Math.min(400, Math.round(basePx * 2));
+          const w = Math.max(minPx, Math.min(maxPx, startW + (t.clientX - startX)));
+          const h = Math.max(minPx, Math.min(maxPx, startH + (t.clientY - startY)));
+          const s = Math.min(w, h);
+          card.style.width = s + 'px';
+          card.style.height = s + 'px';
+        }
+        function stop() {
+          document.removeEventListener('touchmove', move);
+          document.removeEventListener('touchend', stop);
+          const basePx = getStickySidePx(workspaceBoard.offsetWidth || 400, workspaceBoard.offsetHeight || 400);
+          if (basePx > 0) defaultStickyScale = Math.max(0.5, Math.min(2, card.offsetWidth / basePx));
+        }
+        document.addEventListener('touchmove', move, { passive: false });
+        document.addEventListener('touchend', stop);
+      }
+      resizeHandle.addEventListener('mousedown', startDefaultPreviewResize);
+      resizeHandle.addEventListener('touchstart', startDefaultPreviewResizeTouch, { passive: false });
+      
+      defaultPreviewWrap.appendChild(card);
+      updateTextSizeButtons(card);
+    }
+    
     // 出力：フィールドをスクリーンショット
     function captureWorkspaceAsCanvas() {
       if (typeof html2canvas === 'undefined') {
@@ -1830,257 +2264,174 @@
     });
     
     async function exportToPowerPoint() {
-      // pptxgenjsが読み込まれているか確認
       if (typeof PptxGenJS === 'undefined') {
         alert('PowerPoint出力ライブラリが読み込まれていません。\n\nページを再読み込みしてください。\n\nもし問題が続く場合は、ブラウザのコンソール（F12キー）を確認してください。');
         console.error('PptxGenJS is not defined.');
-        console.log('利用可能なグローバル変数:', Object.keys(window).filter(k => k.toLowerCase().includes('pptx')));
         return;
       }
       
-      const pptx = new PptxGenJS();
+      const scopeEl = document.querySelector('input[name="pptx-scope"]:checked');
+      const scope = (scopeEl && scopeEl.value) || 'current';
+      const exportAll = scope === 'all';
       
-      // スライドサイズを設定（A4横）
+      const pptx = new PptxGenJS();
       pptx.layout = 'LAYOUT_WIDE';
       
-      // スライドを追加
-      const slide = pptx.addSlide();
+      if (exportAll && typeof saveCurrentPageToState === 'function') {
+        saveCurrentPageToState();
+        const savedPageIndex = typeof currentPageIndex !== 'undefined' ? currentPageIndex : 0;
+        const pages = typeof pageStates !== 'undefined' ? pageStates : [];
+        const total = typeof TOTAL_SLIDES !== 'undefined' ? TOTAL_SLIDES : 5;
+        
+        for (let i = 0; i < total; i++) {
+          if (pages[i] && typeof loadPageData === 'function') {
+            loadPageData(pages[i]);
+            await new Promise(r => setTimeout(r, 50));
+          }
+          await addCurrentPageAsSlide(pptx);
+        }
+        
+        if (savedPageIndex >= 0 && pages[savedPageIndex] && typeof loadPageData === 'function') {
+          loadPageData(pages[savedPageIndex]);
+          if (typeof currentPageIndex !== 'undefined') currentPageIndex = savedPageIndex;
+          if (typeof updatePageUI === 'function') updatePageUI();
+        }
+      } else {
+        await addCurrentPageAsSlide(pptx);
+      }
       
-      // ワークスペースボードのサイズを取得
+      const fileName = 'cardmap-' + new Date().toISOString().slice(0, 10) + '.pptx';
+      await pptx.writeFile({ fileName: fileName });
+    }
+    
+    async function addCurrentPageAsSlide(pptx) {
+      const slide = pptx.addSlide();
       const boardW = workspaceBoard.offsetWidth || refWorkspaceWidth;
       const boardH = workspaceBoard.offsetHeight || refWorkspaceHeight;
-      
-      // PowerPointのスライドサイズ（インチ単位、A4横: 11.69" x 8.27"）
       const slideWidthInches = 11.69;
       const slideHeightInches = 8.27;
-      
-      // ピクセルからインチへの変換率（96 DPIを想定）
       const pxToInch = 1 / 96;
-      
-      // スケール係数を計算（ボードサイズをスライドサイズに合わせる）
       const scaleX = slideWidthInches / (boardW * pxToInch);
       const scaleY = slideHeightInches / (boardH * pxToInch);
       const scale = Math.min(scaleX, scaleY);
       
-      // 背景色と背景画像を取得
       const bgStyle = window.getComputedStyle(workspaceBoard);
       const bgColor = bgStyle.backgroundColor || currentBgColor;
       
-      // 背景画像のURLを取得（優先順位: currentBgImage > templateImageMap > computedStyle）
       let bgImageUrl = null;
       if (currentBgImage) {
         bgImageUrl = currentBgImage;
-        console.log('背景画像（currentBgImage）:', bgImageUrl);
       } else if (currentTemplate !== 'none') {
         const templateImageMap = {
-          'venn2': 'img/venn2.png',
-          'venn3': 'img/venn3.png',
-          'coordinate': 'img/coordinate.png',
-          'diamond': 'img/diamond.png',
-          'data-chart': 'img/data-chart.png',
-          'web6': 'img/web6.png',
-          'web0': 'img/web0.png',
-          'y-chart': 'img/y-chart.png',
-          'x-chart': 'img/x-chart.png',
-          'w-chart': 'img/w-chart.png',
-          'butterfly': 'img/butterfly.png',
-          'butterfly2': 'img/butterfly2.png',
-          'fishbone': 'img/fishbone.png',
-          'pmi': 'img/pmi.png',
-          'bear': 'img/bear.png',
-          'jellyfish': 'img/jellyfish.png',
-          'tree': 'img/tree.png',
-          'candy': 'img/candy.png',
-          'KWL': 'img/KWL.png',
-          'information-analysis-chart': 'img/information-analysis-chart.png',
-          'pyramid': 'img/pyramid.png',
-          'mountain': 'img/mountain.png',
-          'target': 'img/target.png',
-          'table': 'img/table.png'
+          'venn2': 'img/venn2.png', 'venn3': 'img/venn3.png', 'coordinate': 'img/coordinate.png',
+          'diamond': 'img/diamond.png', 'data-chart': 'img/data-chart.png', 'web6': 'img/web6.png',
+          'web0': 'img/web0.png', 'y-chart': 'img/y-chart.png', 'x-chart': 'img/x-chart.png',
+          'w-chart': 'img/w-chart.png', 'butterfly': 'img/butterfly.png', 'butterfly2': 'img/butterfly2.png',
+          'fishbone': 'img/fishbone.png', 'pmi': 'img/pmi.png', 'bear': 'img/bear.png',
+          'jellyfish': 'img/jellyfish.png', 'tree': 'img/tree.png', 'candy': 'img/candy.png',
+          'KWL': 'img/KWL.png', 'information-analysis-chart': 'img/information-analysis-chart.png',
+          'pyramid': 'img/pyramid.png', 'mountain': 'img/mountain.png', 'target': 'img/target.png', 'table': 'img/table.png'
         };
-        if (templateImageMap[currentTemplate]) {
-          bgImageUrl = templateImageMap[currentTemplate];
-          console.log('背景画像（テンプレート）:', bgImageUrl, 'テンプレート:', currentTemplate);
-        }
+        if (templateImageMap[currentTemplate]) bgImageUrl = templateImageMap[currentTemplate];
+      }
+      if (!bgImageUrl && bgStyle.backgroundImage && bgStyle.backgroundImage !== 'none') {
+        const match = bgStyle.backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+        if (match && match[1]) bgImageUrl = match[1];
       }
       
-      // 背景画像が取得できない場合は、computedStyleから取得を試みる
-      if (!bgImageUrl) {
-        const bgImage = bgStyle.backgroundImage;
-        if (bgImage && bgImage !== 'none') {
-          const match = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
-          if (match && match[1]) {
-            bgImageUrl = match[1];
-            console.log('背景画像（computedStyle）:', bgImageUrl);
-          }
-        }
-      }
-      
-      console.log('最終的な背景画像URL:', bgImageUrl);
-      
-      // 背景色を設定（背景画像がない場合のみ）
       if (!bgImageUrl && bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
         slide.background = { color: rgbToHex(bgColor) };
       }
-      
-      // 背景画像を設定
       if (bgImageUrl) {
         try {
-          // data URLの場合はそのまま使用、それ以外はBase64に変換
-          let imageData;
-          if (bgImageUrl.startsWith('data:')) {
-            imageData = bgImageUrl;
-            console.log('背景画像（data URL）を使用');
-          } else {
-            // 相対パスの画像を読み込む際のタイムアウトを設定
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('画像の読み込みがタイムアウトしました')), 5000);
-            });
-            
-            try {
-              imageData = await Promise.race([
-                imageUrlToBase64(bgImageUrl),
-                timeoutPromise
-              ]);
-              console.log('背景画像をBase64に変換完了');
-            } catch (loadError) {
-              // 画像の読み込みに失敗した場合、相対パスを絶対パスに変換して再試行
-              if (!bgImageUrl.startsWith('http://') && !bgImageUrl.startsWith('https://') && !bgImageUrl.startsWith('file://')) {
-                // 現在のページのベースURLを使用して絶対パスに変換
-                const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-                const absoluteUrl = baseUrl + bgImageUrl;
-                console.log('相対パスを絶対パスに変換:', absoluteUrl);
-                try {
-                  imageData = await Promise.race([
-                    imageUrlToBase64(absoluteUrl),
-                    timeoutPromise
-                  ]);
-                  console.log('背景画像をBase64に変換完了（絶対パス）');
-                } catch (retryError) {
-                  throw loadError; // 元のエラーを再スロー
-                }
-              } else {
-                throw loadError;
-              }
-            }
-          }
-          
-          // Base64データの場合はdataプロパティを使用
-          slide.background = { 
-            data: imageData
-          };
-          console.log('背景画像をスライドに設定完了');
-        } catch (error) {
-          console.warn('背景画像の読み込みに失敗:', error);
-          console.error('背景画像URL:', bgImageUrl);
-          console.error('エラー詳細:', error);
-          // 背景画像の読み込みに失敗した場合は背景色を設定
+          let imageData = bgImageUrl.startsWith('data:') ? bgImageUrl : await imageUrlToBase64(bgImageUrl);
+          slide.background = { data: imageData };
+        } catch (e) {
           if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
             slide.background = { color: rgbToHex(bgColor) };
-            console.log('背景色を設定しました:', rgbToHex(bgColor));
-          } else {
-            console.log('背景色も設定されていません');
           }
         }
-      } else {
-        // 背景画像がない場合は背景色を設定
-        console.log('背景画像なし、背景色を設定:', bgColor);
-        if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
-          slide.background = { color: rgbToHex(bgColor) };
-        }
+      } else if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+        slide.background = { color: rgbToHex(bgColor) };
       }
       
-      // すべてのカードを取得
-      const cards = Array.from(workspaceBoard.querySelectorAll('.card'));
+      // 接続線：2要素の中心を結ぶ1本の線（w=長さ, h=0, 回転で修復を避ける）
+      if (typeof connections !== 'undefined' && Array.isArray(connections)) {
+        const lineColor = '4CAF50';
+        const minLineInch = 0.005;
+        connections.forEach(conn => {
+          if (!conn.from || !conn.to) return;
+          const fromX = conn.from.offsetLeft + conn.from.offsetWidth / 2;
+          const fromY = conn.from.offsetTop + conn.from.offsetHeight / 2;
+          const toX = conn.to.offsetLeft + conn.to.offsetWidth / 2;
+          const toY = conn.to.offsetTop + conn.to.offsetHeight / 2;
+          const x1 = (fromX * pxToInch) * scale;
+          const y1 = (fromY * pxToInch) * scale;
+          const x2 = (toX * pxToInch) * scale;
+          const y2 = (toY * pxToInch) * scale;
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          if (typeof x1 !== 'number' || typeof y1 !== 'number' || !Number.isFinite(x1) || !Number.isFinite(y1) ||
+              !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len < minLineInch) return;
+          const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+          try {
+            slide.addShape(pptx.ShapeType.line, {
+              x: x1,
+              y: y1,
+              w: len,
+              h: 0,
+              rotate: angleDeg,
+              line: { color: lineColor, width: 1 }
+            });
+          } catch (err) {
+            console.warn('PPTX export: 接続線の追加をスキップしました', err);
+          }
+        });
+      }
       
-      // カードを位置順にソート（上から下、左から右）
+      const cards = Array.from(workspaceBoard.querySelectorAll('.card'));
       cards.sort((a, b) => {
-        const topA = parseFloat(a.style.top) || 0;
-        const topB = parseFloat(b.style.top) || 0;
-        if (Math.abs(topA - topB) > 10) {
-          return topA - topB;
-        }
-        const leftA = parseFloat(a.style.left) || 0;
-        const leftB = parseFloat(b.style.left) || 0;
-        return leftA - leftB;
+        const topA = parseFloat(a.style.top) || 0, topB = parseFloat(b.style.top) || 0;
+        if (Math.abs(topA - topB) > 10) return topA - topB;
+        return (parseFloat(a.style.left) || 0) - (parseFloat(b.style.left) || 0);
       });
       
-      // 各カードをスライドに追加
       for (const card of cards) {
-        // カードの実際の位置を取得（offsetLeft/offsetTopはボード内の相対位置）
-        const cardLeft = card.offsetLeft;
-        const cardTop = card.offsetTop;
-        const cardWidth = card.offsetWidth;
-        const cardHeight = card.offsetHeight;
+        const cardLeft = card.offsetLeft, cardTop = card.offsetTop;
+        const cardWidth = card.offsetWidth, cardHeight = card.offsetHeight;
         const cardType = card.dataset.type;
         const cardColor = card.dataset.color || card.style.backgroundColor;
-        
-        // インチ単位に変換
-        const x = (cardLeft * pxToInch) * scale;
-        const y = (cardTop * pxToInch) * scale;
-        const w = (cardWidth * pxToInch) * scale;
-        const h = (cardHeight * pxToInch) * scale;
+        const x = (cardLeft * pxToInch) * scale, y = (cardTop * pxToInch) * scale;
+        const w = (cardWidth * pxToInch) * scale, h = (cardHeight * pxToInch) * scale;
         
         if (cardType === 'text') {
-          // テキストカード - addText()メソッドでShapeとテキストを一体化、テキストを中央配置
           const contentDiv = card.querySelector('.card-content');
           const text = contentDiv ? contentDiv.textContent : '';
-          
           if (text.trim()) {
-            // addText()でShapeとテキストを一体化、テキストを中央配置
             slide.addText(text, {
-              shape: pptx.ShapeType.rect,
-              x: x,
-              y: y,
-              w: w,
-              h: h,
-              fill: { color: rgbToHex(cardColor) },
-              line: { color: '808080', width: 1 },
-              rectRadius: 0.05,
-              fontSize: Math.max(8, Math.min(24, Math.round(h * 12))),
-              align: 'center',
-              valign: 'middle',
-              color: '000000',
-              wrap: true,
-              margin: 0.05
+              shape: pptx.ShapeType.rect, x, y, w, h,
+              fill: { color: rgbToHex(cardColor) }, line: { color: '808080', width: 1 }, rectRadius: 0.05,
+              fontSize: Math.max(8, Math.min(24, Math.round(h * 12))), align: 'center', valign: 'middle',
+              color: '000000', wrap: true, margin: 0.05
             });
           }
         } else if (cardType === 'image') {
-          // 画像カード - 画像を付箋の色で塗りつぶして一体化
           const img = card.querySelector('img');
           if (img && img.src) {
             try {
-              // 画像を付箋の色で塗りつぶした画像に変換
               const imageDataWithBg = await imageWithBackgroundColor(img.src, cardColor);
-              
-              // 付箋の色で塗りつぶした画像を追加
-              slide.addImage({
-                data: imageDataWithBg,
-                x: x,
-                y: y,
-                w: w,
-                h: h
-              });
-            } catch (error) {
-              console.warn('画像カードの読み込みに失敗:', error);
-              // 画像の読み込みに失敗した場合は背景色のカードのみ表示
+              slide.addImage({ data: imageDataWithBg, x, y, w, h });
+            } catch (err) {
               slide.addShape(pptx.ShapeType.rect, {
-                x: x,
-                y: y,
-                w: w,
-                h: h,
-                fill: { color: rgbToHex(cardColor) },
-                line: { color: '808080', width: 1 },
-                rectRadius: 0.05
+                x, y, w, h, fill: { color: rgbToHex(cardColor) },
+                line: { color: '808080', width: 1 }, rectRadius: 0.05
               });
             }
           }
         }
       }
-      
-      // ファイルを保存
-      const fileName = 'cardmap-' + new Date().toISOString().slice(0, 10) + '.pptx';
-      await pptx.writeFile({ fileName: fileName });
     }
     
     // RGB/RGBAカラーを16進数に変換
@@ -2343,14 +2694,23 @@
     let currentTemplate = 'none';
     let currentBgImage = null;
     
-    // カードの色設定 - 白から始まる虹のグラデーション（パステル）
+    // 5枚のスライド（固定）
+    const TOTAL_SLIDES = 5;
+    function createEmptyPage() {
+      return { cards: [], connections: [], background: { color: '#ffffff', template: 'none', image: null } };
+    }
+    let pageStates = [];
+    for (var i = 0; i < TOTAL_SLIDES; i++) pageStates.push(createEmptyPage());
+    let currentPageIndex = 0;
+    
+    // カードの色設定 - デフォルトはパステルイエロー
     const cardColors = [
+      { color: '#fff9c4', name: 'イエロー' },
       { color: '#ffffff', name: '白' },
       { color: '#ffcdd2', name: 'ピンク' },
       { color: '#ffccbc', name: 'ピーチ' },
       { color: '#ffe0b2', name: 'オレンジ' },
       { color: '#ffecb3', name: 'アンバー' },
-      { color: '#fff9c4', name: 'イエロー' },
       { color: '#f1f8e9', name: 'ライム' },
       { color: '#c8e6c9', name: 'ミント' },
       { color: '#b2dfdb', name: 'ティール' },
@@ -2411,6 +2771,10 @@
       { name: 'text-3xl', label: '超大' },
       { name: 'text-4xl', label: '巨大' }
     ];
+    
+    // 付箋のデフォルト設定（次の付箋から適用）
+    let defaultStickyScale = 1.0;   // 50%〜200% → 0.5〜2.0
+    let defaultTextSizeIndex = 3;   // textSizes のインデックス（3 = 大）
     
     // ウィンドウリサイズ時にワークスペースのサイズを調整（ボードを拡縮してカードも一緒に縮小）
     function adjustWorkspaceSize() {
@@ -2664,14 +3028,15 @@
       };
       
       // 優先順位: 1. 画像設定パネルの画像 2. シンキングツールのURL画像 3. シンキングツールの画像テンプレート
+      // 縦横のサイズをフィールドに合わせる（100% 100%で伸縮）
       if (currentBgImage) {
         workspaceBoard.style.backgroundImage = `url(${currentBgImage})`;
-        workspaceBoard.style.backgroundSize = 'contain';
+        workspaceBoard.style.backgroundSize = '100% 100%';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
       } else if (currentTemplate !== 'none' && templateImageMap[currentTemplate]) {
         workspaceBoard.style.backgroundImage = `url(${templateImageMap[currentTemplate]})`;
-        workspaceBoard.style.backgroundSize = 'contain';
+        workspaceBoard.style.backgroundSize = '100% 100%';
         workspaceBoard.style.backgroundPosition = 'center';
         workspaceBoard.style.backgroundRepeat = 'no-repeat';
       } else {
@@ -2769,8 +3134,9 @@
       const boardW = workspaceBoard.offsetWidth || refWorkspaceWidth;
       const boardH = workspaceBoard.offsetHeight || refWorkspaceHeight;
       
-      // A3を基準に付箋サイズ（76mm角）でカードサイズを算出・テキストも画像も正方形
-      const stickyPx = getStickySidePx(boardW, boardH);
+      // A3を基準に付箋サイズ（76mm角）でカードサイズを算出・デフォルト倍率を適用
+      const baseStickyPx = getStickySidePx(boardW, boardH);
+      const stickyPx = Math.max(32, Math.min(400, Math.round(baseStickyPx * defaultStickyScale)));
       const scale = stickyPx / STICKY_MM;
       let cardWidth, cardHeight;
       if (type === 'text') {
@@ -2810,8 +3176,9 @@
       } else {
         contentDiv.textContent = content;
         contentDiv.style.whiteSpace = 'pre-wrap';
-        contentDiv.classList.add('text-lg'); // カード中央に大きく表示
-        card.dataset.textSizeIndex = '3'; // デフォルトは大（インデックス3）
+        const sizeIndex = Math.max(0, Math.min(defaultTextSizeIndex, textSizes.length - 1));
+        contentDiv.classList.add(textSizes[sizeIndex].name);
+        card.dataset.textSizeIndex = String(sizeIndex);
       }
       
       card.appendChild(contentDiv);
@@ -2826,7 +3193,7 @@
       });
       card.appendChild(deleteBtn);
       
-      // リサイズハンドル
+      // リサイズハンドル（右下角をドラッグで付箋のサイズ変更・表示はしない）
       const resizeHandle = document.createElement('div');
       resizeHandle.className = 'resize-handle';
       card.appendChild(resizeHandle);
@@ -2935,6 +3302,7 @@
       
       workspaceBoard.appendChild(card);
       cards.push(card);
+      saveCurrentPageToState();
       
       card.addEventListener('animationend', function onDropEnd(e) {
         if (e.animationName !== 'card-drop-in') return;
@@ -2942,10 +3310,462 @@
         card.classList.remove('card-drop-in');
         card.style.top = top + 'px';
         updateConnections();
+        saveCurrentPageToState();
       });
       
       return card;
     }
+    
+    // 現在のページをJSON用データにシリアライズ（別オブジェクトで返し参照が上書きされないようにする）
+    function getPageData() {
+      var cardEls = workspaceBoard.querySelectorAll('.card');
+      var cards = Array.from(cardEls).map(function(card) {
+        var contentDiv = card.querySelector('.card-content');
+        var img = contentDiv && contentDiv.querySelector('img');
+        var content = img ? img.src : (contentDiv ? (contentDiv.textContent || '') : '');
+        var top = parseInt(card.style.top, 10);
+        if (isNaN(top)) top = 0;
+        var finalTop = card.style.getPropertyValue('--final-top');
+        if (finalTop) top = parseInt(finalTop, 10) || top;
+        return {
+          id: String(card.dataset.id || ('c' + Date.now() + '-' + Math.random())),
+          type: (card.dataset.type || 'text'),
+          content: content,
+          left: parseInt(card.style.left, 10) || 0,
+          top: top,
+          width: card.offsetWidth || 80,
+          height: card.offsetHeight || 80,
+          color: (card.dataset.color || cardColors[0].color),
+          textSizeIndex: card.dataset.type === 'text' ? (card.dataset.textSizeIndex || '3') : undefined
+        };
+      });
+      const connData = connections.map(c => ({
+        fromId: String(c.from.dataset.id),
+        toId: String(c.to.dataset.id)
+      }));
+      return {
+        cards: cards.slice(),
+        connections: connData.slice(),
+        background: {
+          color: currentBgColor,
+          template: currentTemplate,
+          image: currentBgImage
+        }
+      };
+    }
+    
+    // JSONデータからカードを1つ復元（createCardと同様のDOM・イベント、アニメなし）
+    function createCardFromData(data) {
+      if (!data || typeof data !== 'object') return null;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.id = String(data.id != null ? data.id : 'c' + Date.now() + '-' + Math.random());
+      card.dataset.type = data.type || 'text';
+      var cardColor = data.color || cardColors[0].color;
+      card.dataset.color = cardColor;
+      card.style.backgroundColor = cardColor;
+      card.style.width = (data.width || 80) + 'px';
+      card.style.height = (data.height || 80) + 'px';
+      card.style.left = (data.left || 0) + 'px';
+      card.style.top = (data.top || 0) + 'px';
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'card-content';
+      if (data.type === 'image') {
+        const img = document.createElement('img');
+        img.src = data.content || '';
+        img.style.width = '100%';
+        contentDiv.appendChild(img);
+      } else {
+        contentDiv.textContent = data.content || '';
+        contentDiv.style.whiteSpace = 'pre-wrap';
+        const sizeIndex = Math.max(0, Math.min(textSizes.length - 1, parseInt(data.textSizeIndex, 10) || 2));
+        contentDiv.classList.add(textSizes[sizeIndex].name);
+        card.dataset.textSizeIndex = String(sizeIndex);
+      }
+      card.appendChild(contentDiv);
+      
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.innerHTML = '×';
+      addClickOrTouchListener(deleteBtn, (e) => { e.stopPropagation(); deleteCard(card); });
+      card.appendChild(deleteBtn);
+      
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'resize-handle';
+      card.appendChild(resizeHandle);
+      
+      const cardControls = document.createElement('div');
+      cardControls.className = 'card-controls';
+      if (data.type === 'text') {
+        const decreaseBtn = document.createElement('div');
+        decreaseBtn.className = 'card-control-btn';
+        decreaseBtn.innerHTML = '−';
+        addClickOrTouchListener(decreaseBtn, (e) => { e.stopPropagation(); changeTextSize(card, -1); });
+        cardControls.appendChild(decreaseBtn);
+        const resetBtn = document.createElement('div');
+        resetBtn.className = 'card-control-btn active';
+        resetBtn.innerHTML = '標準';
+        addClickOrTouchListener(resetBtn, (e) => { e.stopPropagation(); resetTextSize(card); });
+        cardControls.appendChild(resetBtn);
+        const increaseBtn = document.createElement('div');
+        increaseBtn.className = 'card-control-btn';
+        increaseBtn.innerHTML = '＋';
+        increaseBtn.addEventListener('click', (e) => { e.stopPropagation(); changeTextSize(card, 1); });
+        cardControls.appendChild(increaseBtn);
+      }
+      const colorPickerBtn = document.createElement('div');
+      colorPickerBtn.className = 'card-control-btn color-picker-btn';
+      const colorIndicator = document.createElement('div');
+      colorIndicator.className = 'color-indicator';
+      colorIndicator.style.backgroundColor = cardColor;
+      colorPickerBtn.appendChild(colorIndicator);
+      const colorPickerPanel = document.createElement('div');
+      colorPickerPanel.className = 'color-picker-panel';
+      const colorGrid = document.createElement('div');
+      colorGrid.className = 'color-grid';
+      cardColors.forEach(colorOption => {
+        const colorBtn = document.createElement('div');
+        colorBtn.className = 'color-option-card';
+        colorBtn.style.backgroundColor = colorOption.color;
+        addClickOrTouchListener(colorBtn, (e) => {
+          e.stopPropagation();
+          changeCardColor(card, colorOption.color);
+          colorIndicator.style.backgroundColor = colorOption.color;
+          colorPickerPanel.classList.remove('active');
+        });
+        colorGrid.appendChild(colorBtn);
+      });
+      colorPickerPanel.appendChild(colorGrid);
+      colorPickerBtn.appendChild(colorPickerPanel);
+      addClickOrTouchListener(colorPickerBtn, (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.color-picker-panel.active').forEach(panel => {
+          if (panel !== colorPickerPanel) panel.classList.remove('active');
+        });
+        colorPickerPanel.classList.toggle('active');
+      });
+      cardControls.appendChild(colorPickerBtn);
+      card.appendChild(cardControls);
+      
+      card.addEventListener('mousedown', startDragCard);
+      card.addEventListener('touchstart', handleCardTouchStart, { passive: false });
+      resizeHandle.addEventListener('mousedown', startResizeCard);
+      resizeHandle.addEventListener('touchstart', startResizeCardTouch, { passive: false });
+      
+      workspaceBoard.appendChild(card);
+      cards.push(card);
+      return card;
+    }
+    
+    // JSONデータからページを復元
+    function loadPageData(data) {
+      var ghost = document.getElementById('workspace-ghost');
+      if (ghost) { ghost.style.display = 'none'; ghost.style.backgroundImage = ''; }
+      if (workspace && workspace.style) workspace.style.transform = 'scale(' + currentZoom + ')';
+      if (!data || typeof data !== 'object') data = { cards: [], connections: [], background: {} };
+      var cardsData = Array.isArray(data.cards) ? data.cards : [];
+      var connsData = Array.isArray(data.connections) ? data.connections : [];
+      _loadingPage = true;
+      try {
+      connections.forEach(c => c.line.remove());
+      connections = [];
+      workspaceBoard.querySelectorAll('.card').forEach(el => el.remove());
+      cards = [];
+      selectedCard = null;
+      connectingCard = null;
+      workspace.classList.remove('connecting-from');
+      
+      currentBgColor = (data.background && data.background.color) || '#ffffff';
+      currentTemplate = (data.background && data.background.template) || 'none';
+      currentBgImage = (data.background && data.background.image) || null;
+      updateWorkspaceBackground();
+      document.querySelectorAll('.color-option.active').forEach(el => el.classList.remove('active'));
+      var colorEl = document.querySelector('.color-option[data-color="' + currentBgColor + '"]');
+      if (colorEl) colorEl.classList.add('active');
+      document.querySelectorAll('.template-option.active').forEach(el => el.classList.remove('active'));
+      var templateEl = document.querySelector('.template-option[data-template="' + currentTemplate + '"]');
+      if (templateEl) templateEl.classList.add('active');
+      
+      var idToCard = {};
+      cardsData.forEach(function(cardData) {
+        try {
+          var card = createCardFromData(cardData);
+          if (card) idToCard[card.dataset.id] = card;
+        } catch (e) { console.warn('createCardFromData', e); }
+      });
+      connsData.forEach(function(conn) {
+        var fromCard = idToCard[String(conn.fromId)];
+        var toCard = idToCard[String(conn.toId)];
+        if (fromCard && toCard) createConnection(fromCard, toCard);
+      });
+      updateModeText();
+      } finally { _loadingPage = false; }
+    }
+    
+    var _loadingPage = false;
+    function clonePageData(raw) {
+      if (!raw) return { cards: [], connections: [], background: { color: '#ffffff', template: 'none', image: null } };
+      var c = { cards: [], connections: [], background: raw.background || {} };
+      c.cards = (raw.cards || []).map(function(x) { return { id: x.id, type: x.type, content: x.content, left: x.left, top: x.top, width: x.width, height: x.height, color: x.color, textSizeIndex: x.textSizeIndex }; });
+      c.connections = (raw.connections || []).map(function(r) { return { fromId: r.fromId, toId: r.toId }; });
+      return c;
+    }
+    function saveCurrentPageToState() {
+      if (_loadingPage) return;
+      pageStates[currentPageIndex] = clonePageData(getPageData());
+    }
+    
+    function updatePageUI() {
+      var prevBtn = document.getElementById('page-prev');
+      var nextBtn = document.getElementById('page-next');
+      var infoEl = document.getElementById('page-info');
+      if (prevBtn) prevBtn.classList.toggle('btn-page-inactive', currentPageIndex <= 0);
+      if (nextBtn) nextBtn.classList.toggle('btn-page-inactive', currentPageIndex >= TOTAL_SLIDES - 1);
+      if (infoEl) infoEl.textContent = (currentPageIndex + 1) + ' / ' + TOTAL_SLIDES;
+    }
+    
+    function runSlideAnimation(direction, thenLoad) {
+      let done = false;
+      const applySwitch = () => {
+        if (done) return;
+        done = true;
+        thenLoad();
+        updatePageUI();
+      };
+      const ghost = document.getElementById('workspace-ghost');
+      if (!ghost) { applySwitch(); return; }
+      const zoom = currentZoom;
+      const baseTransform = `scale(${zoom})`;
+      function setWorkspaceTransform(xPercent) {
+        workspace.style.transform = `scale(${zoom}) translateX(${xPercent}%)`;
+      }
+      const doSwitch = () => {
+        applySwitch();
+        if (direction === 'next') {
+          setWorkspaceTransform(100);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => setWorkspaceTransform(0));
+          });
+        } else {
+          setWorkspaceTransform(-100);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => setWorkspaceTransform(0));
+          });
+        }
+        setTimeout(() => {
+          ghost.style.display = 'none';
+          ghost.style.backgroundImage = '';
+          workspace.style.transform = baseTransform;
+          updatePageUI();
+        }, 380);
+      };
+      const fallbackTimer = setTimeout(() => {
+        if (done) return;
+        applySwitch();
+      }, 1500);
+      captureWorkspaceAsCanvas().then(canvas => {
+        clearTimeout(fallbackTimer);
+        if (done) return;
+        const dataUrl = canvas.toDataURL('image/png');
+        ghost.style.backgroundImage = `url(${dataUrl})`;
+        ghost.style.display = 'block';
+        doSwitch();
+      }).catch(() => {
+        clearTimeout(fallbackTimer);
+        applySwitch();
+      });
+    }
+    
+    function goToPrevPage() {
+      if (currentPageIndex <= 0) return;
+      saveCurrentPageToState();
+      var prevIndex = currentPageIndex - 1;
+      runSlideAnimation('prev', function() {
+        currentPageIndex = prevIndex;
+        loadPageData(pageStates[prevIndex]);
+      });
+    }
+    
+    function goToNextPage() {
+      if (currentPageIndex >= TOTAL_SLIDES - 1) return;
+      saveCurrentPageToState();
+      var nextIndex = currentPageIndex + 1;
+      runSlideAnimation('next', function() {
+        currentPageIndex = nextIndex;
+        loadPageData(pageStates[nextIndex]);
+      });
+    }
+    
+    function setupPageNav() {
+      var prevBtn = document.getElementById('page-prev');
+      var nextBtn = document.getElementById('page-next');
+      if (prevBtn) {
+        addClickOrTouchListener(prevBtn, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          goToPrevPage();
+        });
+      }
+      if (nextBtn) {
+        addClickOrTouchListener(nextBtn, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          goToNextPage();
+        });
+      }
+    }
+    function initPages() {
+      setupPageNav();
+      loadPageData(pageStates[currentPageIndex]);
+      updatePageUI();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPages);
+    } else {
+      initPages();
+    }
+    
+    function exportJSON(scope) {
+      if (scope !== 'current' && scope !== 'all') scope = 'current';
+      saveCurrentPageToState();
+      var pagesToSave = scope === 'current'
+        ? [clonePageData(getPageData())]
+        : pageStates.slice();
+      const data = { version: 1, pages: pagesToSave };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cardmap-' + (new Date().toISOString().slice(0, 19).replace(/:/g, '-')) + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    var saveChoiceModal = document.getElementById('save-choice-modal');
+    function openSaveChoiceModal() {
+      if (saveChoiceModal) {
+        saveChoiceModal.classList.add('open');
+        saveChoiceModal.setAttribute('aria-hidden', 'false');
+      }
+    }
+    function closeSaveChoiceModal() {
+      if (saveChoiceModal) {
+        saveChoiceModal.classList.remove('open');
+        saveChoiceModal.setAttribute('aria-hidden', 'true');
+      }
+    }
+    
+    var pendingImportMode = null; // 'append' | 'replace' | null
+    function importJSON(file, mode) {
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var data = JSON.parse(e.target.result);
+          if (mode === 'append') {
+            saveCurrentPageToState();
+            var pageCount = (data.pages && Array.isArray(data.pages)) ? data.pages.length : 0;
+            var onePage = (pageCount > 0)
+              ? data.pages[0]
+              : (data.cards || data.connections ? data : null);
+            if (!onePage || (!onePage.cards && !onePage.connections)) {
+              alert('読み込むデータがありません。');
+              return;
+            }
+            var currentPage = clonePageData(pageStates[currentPageIndex]);
+            var loadedPage = clonePageData(onePage);
+            var idMap = {};
+            (loadedPage.cards || []).forEach(function(c, i) {
+              var newId = 'c' + Date.now() + '-' + i;
+              idMap[String(c.id)] = newId;
+              c.id = newId;
+            });
+            (loadedPage.connections || []).forEach(function(conn) {
+              conn.fromId = idMap[String(conn.fromId)] || conn.fromId;
+              conn.toId = idMap[String(conn.toId)] || conn.toId;
+            });
+            currentPage.cards = (currentPage.cards || []).concat(loadedPage.cards || []);
+            currentPage.connections = (currentPage.connections || []).concat(loadedPage.connections || []);
+            pageStates[currentPageIndex] = currentPage;
+            loadPageData(currentPage);
+            updatePageUI();
+            if (pageCount > 1) {
+              alert(pageCount + '枚のデータのうち、1枚目を現在のページに追加しました。');
+            }
+            return;
+          }
+          if (data.pages && Array.isArray(data.pages)) {
+            pageStates = [];
+            for (var i = 0; i < TOTAL_SLIDES; i++) {
+              pageStates.push(i < data.pages.length ? data.pages[i] : createEmptyPage());
+            }
+          } else if (data.cards || data.connections) {
+            pageStates = [data];
+            for (var j = 1; j < TOTAL_SLIDES; j++) pageStates.push(createEmptyPage());
+          } else {
+            alert('JSONの形式が正しくありません。');
+            return;
+          }
+          currentPageIndex = 0;
+          loadPageData(pageStates[0]);
+          updatePageUI();
+        } catch (err) {
+          alert('JSONの読み込みに失敗しました: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    var loadChoiceModal = document.getElementById('load-choice-modal');
+    function openLoadChoiceModal() {
+      if (loadChoiceModal) {
+        loadChoiceModal.classList.add('open');
+        loadChoiceModal.setAttribute('aria-hidden', 'false');
+      }
+    }
+    function closeLoadChoiceModal() {
+      if (loadChoiceModal) {
+        loadChoiceModal.classList.remove('open');
+        loadChoiceModal.setAttribute('aria-hidden', 'true');
+      }
+    }
+    
+    addClickOrTouchListener(document.getElementById('json-save'), openSaveChoiceModal);
+    addClickOrTouchListener(document.getElementById('save-choice-current'), function() {
+      exportJSON('current');
+      closeSaveChoiceModal();
+    });
+    addClickOrTouchListener(document.getElementById('save-choice-all'), function() {
+      exportJSON('all');
+      closeSaveChoiceModal();
+    });
+    addClickOrTouchListener(document.getElementById('save-choice-cancel'), closeSaveChoiceModal);
+    if (saveChoiceModal) {
+      saveChoiceModal.addEventListener('click', function(e) {
+        if (e.target === saveChoiceModal) closeSaveChoiceModal();
+      });
+    }
+    addClickOrTouchListener(document.getElementById('json-load'), openLoadChoiceModal);
+    addClickOrTouchListener(document.getElementById('load-choice-append'), function() {
+      pendingImportMode = 'append';
+      closeLoadChoiceModal();
+      document.getElementById('json-file-input').click();
+    });
+    addClickOrTouchListener(document.getElementById('load-choice-replace'), function() {
+      pendingImportMode = 'replace';
+      closeLoadChoiceModal();
+      document.getElementById('json-file-input').click();
+    });
+    addClickOrTouchListener(document.getElementById('load-choice-cancel'), closeLoadChoiceModal);
+    if (loadChoiceModal) {
+      loadChoiceModal.addEventListener('click', function(e) {
+        if (e.target === loadChoiceModal) closeLoadChoiceModal();
+      });
+    }
+    document.getElementById('json-file-input').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (file) importJSON(file, pendingImportMode);
+      pendingImportMode = null;
+      e.target.value = '';
+    });
     
     // カードの色を変更
     function changeCardColor(card, color) {
@@ -2974,6 +3794,7 @@
       
       // ボタンの状態を更新
       updateTextSizeButtons(card);
+      if (card.dataset.defaultPreview === '1') defaultTextSizeIndex = currentSizeIndex;
     }
     
     // テキストサイズをリセット
@@ -2993,6 +3814,7 @@
       
       // ボタンの状態を更新
       updateTextSizeButtons(card);
+      if (card.dataset.defaultPreview === '1') defaultTextSizeIndex = 2;
     }
     
     // テキストサイズボタンの状態を更新
@@ -3031,6 +3853,7 @@
       
       // DOM要素を削除
       card.remove();
+      saveCurrentPageToState();
     }
     
     // カードのドラッグ開始（マウス）：移動したらドラッグ、しなければクリック＝接続
@@ -3086,6 +3909,7 @@
           handleCardSelect(card);
         } else {
           selectCard(card, e);
+          saveCurrentPageToState();
         }
       }
       
@@ -3142,6 +3966,7 @@
           handleCardSelect(card);
         } else {
           selectCard(card, e);
+          saveCurrentPageToState();
         }
       }
       
@@ -3171,6 +3996,7 @@
       function stopResize() {
         document.removeEventListener('mousemove', resize);
         document.removeEventListener('mouseup', stopResize);
+        saveCurrentPageToState();
       }
       
       document.addEventListener('mousemove', resize);
@@ -3203,6 +4029,7 @@
       function stopResize() {
         document.removeEventListener('touchmove', resize);
         document.removeEventListener('touchend', stopResize);
+        saveCurrentPageToState();
       }
       
       document.addEventListener('touchmove', resize, { passive: false });
@@ -3281,6 +4108,7 @@
     function deleteConnection(connection) {
       connection.line.remove();
       connections = connections.filter(c => c !== connection);
+      saveCurrentPageToState();
     }
     
     // カード間の接続を作成
@@ -3297,6 +4125,7 @@
       
       connections.push(connection);
       updateConnectionLine(connection);
+      saveCurrentPageToState();
       
       // クリックで接続線を削除
       addClickOrTouchListener(line, (e) => {
@@ -3362,6 +4191,7 @@
       
       // 接続線を更新
       updateConnections();
+      saveCurrentPageToState();
       
       // イベントのデフォルト動作を防止（ページのスクロールなど）
       e.preventDefault();
