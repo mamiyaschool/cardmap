@@ -182,29 +182,16 @@
       outline: none;
     }
     
+    /* カード上の削除ボタンは非表示にする */
+    .card .delete-btn,
+    .card-controls .delete-btn,
     .delete-btn {
-      position: absolute;
-      top: -8px;
-      right: -8px;
-      width: 24px;
-      height: 24px;
-      background-color: #e53935;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.2s;
-      z-index: 2;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    
-    .card.selected .delete-btn {
-      opacity: 1;
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+      overflow: hidden !important;
     }
     
     .resize-handle {
@@ -319,9 +306,8 @@
       transform: scale(1.1);
     }
     
-    /* モバイル用 - 選択時のみ削除ボタン・リサイズハンドル表示 */
+    /* モバイル用 - 選択時のみリサイズハンドル表示 */
     @media (max-width: 768px) {
-      .card.selected .delete-btn,
       .card.selected .resize-handle {
         opacity: 1;
       }
@@ -445,6 +431,15 @@
       color: #333;
       white-space: nowrap;
       flex-shrink: 0;
+    }
+    .thinking-tool-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .thinking-tool-delete-btn {
+      margin: 0;
     }
     .thinking-tool-trigger {
       display: flex;
@@ -586,6 +581,12 @@
     .page-nav .btn-page#page-next { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
     .page-nav .btn-page#json-save { background: #ffe0b2; color: #e65100; border-color: #ffcc80; }
     .page-nav .btn-page#json-load { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .page-nav .btn-page.btn-page-delete { background: #ffebee; color: #c62828; border-color: #ef5350; animation: delete-btn-blink 2.2s ease-in-out infinite; }
+    .page-nav .btn-page.btn-page-delete:hover { background: #ffcdd2; animation: none; }
+    @keyframes delete-btn-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
     
     .toolbar {
       background-color: #2e7d32;
@@ -1530,10 +1531,13 @@
         </div>
         <div class="thinking-tool-dropdown-wrap">
           <span class="thinking-tool-nav-label">シンキングツール</span>
-          <button type="button" class="thinking-tool-trigger" id="thinking-tool-trigger" aria-expanded="false" aria-haspopup="true" title="シンキングツールを選択">
-            <span class="thinking-tool-trigger-thumb" id="thinking-tool-trigger-thumb"></span>
-            <span class="thinking-tool-trigger-label" id="thinking-tool-trigger-label">なし</span>
-          </button>
+          <div class="thinking-tool-row">
+            <button type="button" id="field-delete-btn" class="btn-page btn-page-delete thinking-tool-delete-btn" style="display: none;">削除</button>
+            <button type="button" class="thinking-tool-trigger" id="thinking-tool-trigger" aria-expanded="false" aria-haspopup="true" title="シンキングツールを選択">
+              <span class="thinking-tool-trigger-thumb" id="thinking-tool-trigger-thumb"></span>
+              <span class="thinking-tool-trigger-label" id="thinking-tool-trigger-label">なし</span>
+            </button>
+          </div>
           <div class="thinking-tool-menu" id="thinking-tool-menu" hidden>
             <div class="thinking-tool-menu-grid" id="thinking-tool-menu-grid"></div>
           </div>
@@ -2810,9 +2814,51 @@
     let connectingCard = null;
     
     function updateModeText() {
-      modeText.textContent = connectingCard ? '接続先のカードをクリック' : 'ドラッグで移動・クリックで接続';
+      if (connectingCard) {
+        modeText.textContent = '接続先のカードをクリック';
+      } else if (selectedCard) {
+        modeText.textContent = '他のカードをタップすると線でつなぎます';
+      } else {
+        modeText.textContent = 'ドラッグで移動・クリックで接続';
+      }
     }
     let selectedCard = null;
+    
+    // ツールバーの削除ボタンのイベント設定
+    const fieldDeleteBtn = document.getElementById('field-delete-btn');
+    if (fieldDeleteBtn) {
+      addClickOrTouchListener(fieldDeleteBtn, (e) => {
+        e.stopPropagation();
+        if (selectedCard) {
+          deleteCard(selectedCard);
+        }
+      });
+    }
+    
+    // すべてのカードから削除ボタンを完全に削除する関数
+    function removeAllDeleteButtons() {
+      if (workspaceBoard) {
+        // すべての削除ボタンを検索して削除
+        const allDeleteBtns = workspaceBoard.querySelectorAll('.delete-btn');
+        allDeleteBtns.forEach(btn => {
+          btn.remove();
+        });
+        
+        // カード内のすべての要素をチェックして、削除ボタンらしきものを削除
+        workspaceBoard.querySelectorAll('.card').forEach(card => {
+          // カードの直接の子要素で、削除ボタンらしきものを削除
+          Array.from(card.children).forEach(child => {
+            if (child.classList.contains('delete-btn') || 
+                (child.textContent === '×' && child.style.position === 'absolute')) {
+              child.remove();
+            }
+          });
+        });
+      }
+    }
+    
+    // 定期的に削除ボタンをチェックして削除
+    setInterval(removeAllDeleteButtons, 500);
     
     // ズーム設定
     let currentZoom = 1;
@@ -3462,16 +3508,6 @@
       
       card.appendChild(contentDiv);
       
-      // 削除ボタン
-      const deleteBtn = document.createElement('div');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.innerHTML = '×';
-      addClickOrTouchListener(deleteBtn, (e) => {
-        e.stopPropagation();
-        deleteCard(card);
-      });
-      card.appendChild(deleteBtn);
-      
       // リサイズハンドル（右下角をドラッグで付箋のサイズ変更・表示はしない）
       const resizeHandle = document.createElement('div');
       resizeHandle.className = 'resize-handle';
@@ -3568,6 +3604,40 @@
       
       cardControls.appendChild(colorPickerBtn);
       card.appendChild(cardControls);
+      
+      // 既存の削除ボタンを削除（念のため）
+      const existingDeleteBtns = card.querySelectorAll('.delete-btn');
+      existingDeleteBtns.forEach(btn => btn.remove());
+      
+      // カードコントロール内の削除ボタンも削除
+      const deleteBtnsInControls = cardControls.querySelectorAll('.delete-btn');
+      deleteBtnsInControls.forEach(btn => btn.remove());
+      
+      // カードの子要素で「×」を含む要素も削除
+      Array.from(card.children).forEach(child => {
+        if (child.textContent === '×' || child.textContent.trim() === '×') {
+          child.remove();
+        }
+      });
+      
+      // MutationObserverで削除ボタンの追加を監視して削除
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) { // Element node
+              if (node.classList && node.classList.contains('delete-btn')) {
+                node.remove();
+              } else if (node.textContent === '×' || node.textContent.trim() === '×') {
+                const style = window.getComputedStyle(node);
+                if (style.position === 'absolute') {
+                  node.remove();
+                }
+              }
+            }
+          });
+        });
+      });
+      observer.observe(card, { childList: true, subtree: true });
       
       // カードのドラッグ／クリック（マウス）：ドラッグ＝移動、クリック＝接続
       card.addEventListener('mousedown', startDragCard);
@@ -3683,12 +3753,6 @@
       }
       card.appendChild(contentDiv);
       
-      const deleteBtn = document.createElement('div');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.innerHTML = '×';
-      addClickOrTouchListener(deleteBtn, (e) => { e.stopPropagation(); deleteCard(card); });
-      card.appendChild(deleteBtn);
-      
       const resizeHandle = document.createElement('div');
       resizeHandle.className = 'resize-handle';
       card.appendChild(resizeHandle);
@@ -3745,6 +3809,40 @@
       });
       cardControls.appendChild(colorPickerBtn);
       card.appendChild(cardControls);
+      
+      // 既存の削除ボタンを削除（念のため）
+      const existingDeleteBtns = card.querySelectorAll('.delete-btn');
+      existingDeleteBtns.forEach(btn => btn.remove());
+      
+      // カードコントロール内の削除ボタンも削除
+      const deleteBtnsInControls = cardControls.querySelectorAll('.delete-btn');
+      deleteBtnsInControls.forEach(btn => btn.remove());
+      
+      // カードの子要素で「×」を含む要素も削除
+      Array.from(card.children).forEach(child => {
+        if (child.textContent === '×' || child.textContent.trim() === '×') {
+          child.remove();
+        }
+      });
+      
+      // MutationObserverで削除ボタンの追加を監視して削除
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) { // Element node
+              if (node.classList && node.classList.contains('delete-btn')) {
+                node.remove();
+              } else if (node.textContent === '×' || node.textContent.trim() === '×') {
+                const style = window.getComputedStyle(node);
+                if (style.position === 'absolute') {
+                  node.remove();
+                }
+              }
+            }
+          });
+        });
+      });
+      observer.observe(card, { childList: true, subtree: true });
       
       card.addEventListener('mousedown', startDragCard);
       card.addEventListener('touchstart', handleCardTouchStart, { passive: false });
@@ -3815,6 +3913,14 @@
         var toCard = idToCard[String(conn.toId)];
         if (fromCard && toCard) createConnection(fromCard, toCard);
       });
+      
+      // すべてのカードから削除ボタンを削除（念のため）
+      workspaceBoard.querySelectorAll('.card .delete-btn').forEach(btn => btn.remove());
+      workspaceBoard.querySelectorAll('.card-controls .delete-btn').forEach(btn => btn.remove());
+      workspaceBoard.querySelectorAll('.delete-btn').forEach(btn => {
+        if (btn.closest('.card')) btn.remove();
+      });
+      
       updateModeText();
       updateWorkspaceBackground();
       requestAnimationFrame(function() { updateWorkspaceBackground(); });
@@ -3944,6 +4050,16 @@
     function initPages() {
       setupPageNav();
       loadPageData(pageStates[currentPageIndex]);
+      // すべてのカードから削除ボタンを削除（念のため）
+      setTimeout(() => {
+        if (workspaceBoard) {
+          workspaceBoard.querySelectorAll('.card .delete-btn').forEach(btn => btn.remove());
+          workspaceBoard.querySelectorAll('.card-controls .delete-btn').forEach(btn => btn.remove());
+          workspaceBoard.querySelectorAll('.delete-btn').forEach(btn => {
+            if (btn.closest('.card')) btn.remove();
+          });
+        }
+      }, 100);
       updatePageUI();
     }
     if (document.readyState === 'loading') {
@@ -4182,6 +4298,13 @@
       // 選択状態をクリア
       if (selectedCard === card) {
         selectedCard = null;
+        // ツールバーの削除ボタンを非表示
+        const fieldDeleteBtn = document.getElementById('field-delete-btn');
+        if (fieldDeleteBtn) {
+          fieldDeleteBtn.style.display = 'none';
+        }
+        // モードテキストを更新
+        updateModeText();
       }
       
       // DOM要素を削除
@@ -4451,6 +4574,15 @@
       // 新しいカードを選択
       selectedCard = card;
       card.classList.add('selected');
+      
+      // ツールバーの削除ボタンを表示
+      const fieldDeleteBtn = document.getElementById('field-delete-btn');
+      if (fieldDeleteBtn) {
+        fieldDeleteBtn.style.display = '';
+      }
+      
+      // モードテキストを更新
+      updateModeText();
     }
     
     // 選択解除（接続中のキャンセルも含む）
@@ -4463,8 +4595,16 @@
         connectingCard.classList.remove('connecting');
         connectingCard = null;
         workspace.classList.remove('connecting-from');
-        updateModeText();
       }
+      
+      // ツールバーの削除ボタンを非表示
+      const fieldDeleteBtn = document.getElementById('field-delete-btn');
+      if (fieldDeleteBtn) {
+        fieldDeleteBtn.style.display = 'none';
+      }
+      
+      // モードテキストを更新
+      updateModeText();
     }
     
     // ワークスペースのクリックイベント - 選択解除・接続キャンセル（空き領域クリック時）
