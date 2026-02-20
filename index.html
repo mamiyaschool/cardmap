@@ -441,6 +441,10 @@
     .thinking-tool-delete-btn {
       margin: 0;
     }
+    .page-nav .btn-page.btn-page-undo-redo {
+      padding: 0.4em 0.75em;
+      min-width: 0;
+    }
     .thinking-tool-trigger {
       display: flex;
       align-items: center;
@@ -581,6 +585,12 @@
     .page-nav .btn-page#page-next { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
     .page-nav .btn-page#json-save { background: #ffe0b2; color: #e65100; border-color: #ffcc80; }
     .page-nav .btn-page#json-load { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .page-nav .btn-page#undo-btn { background: #f5f5f5; color: #424242; border-color: #e0e0e0; }
+    .page-nav .btn-page#undo-btn:hover:not(:disabled) { background: #eeeeee; }
+    .page-nav .btn-page#undo-btn:disabled { cursor: not-allowed; }
+    .page-nav .btn-page#redo-btn { background: #f5f5f5; color: #424242; border-color: #e0e0e0; }
+    .page-nav .btn-page#redo-btn:hover:not(:disabled) { background: #eeeeee; }
+    .page-nav .btn-page#redo-btn:disabled { cursor: not-allowed; }
     .page-nav .btn-page.btn-page-delete { background: #ffebee; color: #c62828; border-color: #ef5350; animation: delete-btn-blink 2.2s ease-in-out infinite; }
     .page-nav .btn-page.btn-page-delete:hover { background: #ffcdd2; animation: none; }
     @keyframes delete-btn-blink {
@@ -1521,6 +1531,8 @@
       <div class="page-nav">
         <div class="page-nav-spacer" aria-hidden="true"></div>
         <div class="page-nav-center">
+          <button type="button" id="undo-btn" class="btn-page btn-page-undo-redo" title="一つ前の操作に戻す" disabled>↩</button>
+          <button type="button" id="redo-btn" class="btn-page btn-page-undo-redo" title="一つ先の操作に進める" disabled>↪</button>
           <button type="button" id="page-prev" class="btn-page">← 前</button>
           <span class="page-info" id="page-info">1 / 5</span>
           <button type="button" id="page-next" class="btn-page">次 →</button>
@@ -3929,6 +3941,11 @@
     }
     
     var _loadingPage = false;
+    var _loadingFromUndo = false;
+    var _loadingFromRedo = false;
+    var undoHistory = [];
+    var redoHistory = [];
+    var UNDO_MAX = 30;
     function clonePageData(raw) {
       if (!raw) return { cards: [], connections: [], background: { color: '#ffffff', template: 'none', image: null } };
       var bg = (raw.background && typeof raw.background === 'object') ? raw.background : {};
@@ -3945,7 +3962,16 @@
     }
     function saveCurrentPageToState() {
       if (_loadingPage) return;
-      pageStates[currentPageIndex] = clonePageData(getPageData());
+      var prev = pageStates[currentPageIndex];
+      var next = clonePageData(getPageData());
+      if (!_loadingFromUndo && !_loadingFromRedo && prev) {
+        undoHistory.push(clonePageData(prev));
+        if (undoHistory.length > UNDO_MAX) undoHistory.shift();
+        redoHistory = [];
+      }
+      pageStates[currentPageIndex] = next;
+      if (typeof updateUndoButton === 'function') updateUndoButton();
+      if (typeof updateRedoButton === 'function') updateRedoButton();
     }
     
     function updatePageUI() {
@@ -3955,6 +3981,60 @@
       if (prevBtn) prevBtn.classList.toggle('btn-page-inactive', currentPageIndex <= 0);
       if (nextBtn) nextBtn.classList.toggle('btn-page-inactive', currentPageIndex >= TOTAL_SLIDES - 1);
       if (infoEl) infoEl.textContent = (currentPageIndex + 1) + ' / ' + TOTAL_SLIDES;
+      if (typeof updateUndoButton === 'function') updateUndoButton();
+      if (typeof updateRedoButton === 'function') updateRedoButton();
+    }
+    
+    function undo() {
+      if (undoHistory.length === 0) return;
+      _loadingFromUndo = true;
+      redoHistory.push(clonePageData(getPageData()));
+      if (redoHistory.length > UNDO_MAX) redoHistory.shift();
+      var state = undoHistory.pop();
+      loadPageData(state);
+      pageStates[currentPageIndex] = clonePageData(state);
+      selectedCard = null;
+      connectingCard = null;
+      if (workspace) workspace.classList.remove('connecting-from');
+      var fieldDeleteBtn = document.getElementById('field-delete-btn');
+      if (fieldDeleteBtn) fieldDeleteBtn.style.display = 'none';
+      updateModeText();
+      updateUndoButton();
+      updateRedoButton();
+      _loadingFromUndo = false;
+    }
+    
+    function redo() {
+      if (redoHistory.length === 0) return;
+      _loadingFromRedo = true;
+      undoHistory.push(clonePageData(getPageData()));
+      if (undoHistory.length > UNDO_MAX) undoHistory.shift();
+      var state = redoHistory.pop();
+      loadPageData(state);
+      pageStates[currentPageIndex] = clonePageData(state);
+      selectedCard = null;
+      connectingCard = null;
+      if (workspace) workspace.classList.remove('connecting-from');
+      var fieldDeleteBtn = document.getElementById('field-delete-btn');
+      if (fieldDeleteBtn) fieldDeleteBtn.style.display = 'none';
+      updateModeText();
+      updateUndoButton();
+      updateRedoButton();
+      _loadingFromRedo = false;
+    }
+    
+    function updateUndoButton() {
+      var btn = document.getElementById('undo-btn');
+      if (!btn) return;
+      btn.disabled = undoHistory.length === 0;
+      btn.title = undoHistory.length === 0 ? '元に戻せません' : '一つ前の操作に戻す';
+    }
+    
+    function updateRedoButton() {
+      var btn = document.getElementById('redo-btn');
+      if (!btn) return;
+      btn.disabled = redoHistory.length === 0;
+      btn.title = redoHistory.length === 0 ? '進めません' : '一つ先の操作に進める';
     }
     
     function runSlideAnimation(direction, thenLoad) {
@@ -4012,20 +4092,28 @@
     function goToPrevPage() {
       if (currentPageIndex <= 0) return;
       saveCurrentPageToState();
+      undoHistory = [];
+      redoHistory = [];
       var prevIndex = currentPageIndex - 1;
       runSlideAnimation('prev', function() {
         currentPageIndex = prevIndex;
         loadPageData(pageStates[prevIndex]);
+        updateUndoButton();
+        updateRedoButton();
       });
     }
     
     function goToNextPage() {
       if (currentPageIndex >= TOTAL_SLIDES - 1) return;
       saveCurrentPageToState();
+      undoHistory = [];
+      redoHistory = [];
       var nextIndex = currentPageIndex + 1;
       runSlideAnimation('next', function() {
         currentPageIndex = nextIndex;
         loadPageData(pageStates[nextIndex]);
+        updateUndoButton();
+        updateRedoButton();
       });
     }
     
@@ -4142,12 +4230,16 @@
             return;
           }
           if (data.pages && Array.isArray(data.pages)) {
+            undoHistory = [];
+            redoHistory = [];
             pageStates = [];
             for (var i = 0; i < TOTAL_SLIDES; i++) {
               var page = i < data.pages.length ? data.pages[i] : createEmptyPage();
               pageStates.push(normalizePageBackground(page));
             }
           } else if (data.cards || data.connections) {
+            undoHistory = [];
+            redoHistory = [];
             pageStates = [normalizePageBackground(data)];
             for (var j = 1; j < TOTAL_SLIDES; j++) pageStates.push(createEmptyPage());
           } else {
@@ -4178,6 +4270,22 @@
     }
     
     addClickOrTouchListener(document.getElementById('json-save'), openSaveChoiceModal);
+    var undoBtn = document.getElementById('undo-btn');
+    if (undoBtn) {
+      addClickOrTouchListener(undoBtn, function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        undo();
+      });
+    }
+    var redoBtn = document.getElementById('redo-btn');
+    if (redoBtn) {
+      addClickOrTouchListener(redoBtn, function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        redo();
+      });
+    }
     addClickOrTouchListener(document.getElementById('save-choice-current'), function() {
       exportJSON('current');
       closeSaveChoiceModal();
