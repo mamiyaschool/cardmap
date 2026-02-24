@@ -1956,7 +1956,9 @@
     }
     const savedLeft = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_LEFT_KEY), 10); } catch (_) { return null; } })();
     const savedTop = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_TOP_KEY), 10); } catch (_) { return null; } })();
-    applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedTop === 'number' && !isNaN(savedTop) ? savedTop : 0);
+    const pageNav = mainContent ? mainContent.querySelector('.page-nav') : null;
+    const panelDefaultTop = pageNav && pageNav.offsetHeight ? pageNav.offsetHeight : 52;
+    applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedTop === 'number' && !isNaN(savedTop) ? savedTop : panelDefaultTop);
     
     addClickOrTouchListener(panelToggleBtn, (e) => {
       e.stopPropagation();
