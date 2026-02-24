@@ -687,9 +687,12 @@
       position: relative;
     }
     
+    /* パネル開閉：左上を固定し、コンテンツの表示/非表示のみ（座標がずれない） */
     .bottom-panel {
+      --panel-duration: 0.4s;
+      --panel-ease: cubic-bezier(0.33, 1, 0.68, 1);
       position: absolute;
-      bottom: 0;
+      top: 0;
       left: 0;
       /* タブと「閉じる」が入る幅に縮小 */
       width: max-content;
@@ -700,10 +703,11 @@
       backdrop-filter: blur(6px);
       border-radius: 12px;
       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
-      transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+      transition: background-color var(--panel-duration) var(--panel-ease),
+                  box-shadow var(--panel-duration) var(--panel-ease);
       overflow: hidden;
     }
-    /* 折り畳み時：パステルグリーンのすりガラス効果＋フロート風（浮遊時の陰で存在がわかる） */
+    /* 折り畳み時：パステルグリーンのすりガラス効果＋フロート風 */
     .bottom-panel.collapsed {
       background-color: rgba(180, 220, 180, 0.25);
       backdrop-filter: blur(6px) saturate(150%);
@@ -723,11 +727,12 @@
       cursor: grabbing;
     }
     
+    /* パネル内の開閉はアニメなし（スライドのみ）。ロールカーテン風の動きは使わない */
     .bottom-panel-content {
       max-height: 80vh;
       overflow-y: auto;
       overflow-x: hidden;
-      transition: max-height 0.3s ease, opacity 0.2s ease;
+      transition: none;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1594,10 +1599,8 @@
           <div class="input-tab" data-tab="output">出力</div>
         </div>
         <button type="button" id="panel-toggle" class="btn panel-toggle-btn bg-white/20 hover:bg-white/30 text-white" title="パネルを閉じる">
-          <span class="panel-toggle-btn-collapse">閉じる</span>
-          <span class="panel-toggle-btn-collapse">▼</span>
-          <span class="panel-toggle-btn-expand">入力パネルを開く</span>
-          <span class="panel-toggle-btn-expand">▲</span>
+          <span class="panel-toggle-btn-collapse">閉じる▲</span>
+          <span class="panel-toggle-btn-expand">入力パネルを開く▼</span>
         </button>
       </div>
       
@@ -1925,38 +1928,41 @@
     const panelToggleBtn = document.getElementById('panel-toggle');
     const panelDragHandle = document.getElementById('panel-drag-handle');
     const PANEL_POSITION_LEFT_KEY = 'cardmap-panel-left';
-    const PANEL_POSITION_BOTTOM_KEY = 'cardmap-panel-bottom';
+    const PANEL_POSITION_TOP_KEY = 'cardmap-panel-top';
     
     const mainContent = document.querySelector('.main-content');
     function getPanelBounds() {
       const r = mainContent.getBoundingClientRect();
       const w = bottomPanel.offsetWidth;
       const h = bottomPanel.offsetHeight;
-      const maxBottom = Math.max(0, (r.height || mainContent.clientHeight) - h);
-      return { minLeft: 0, maxLeft: Math.max(0, r.width - w), maxBottom };
+      const maxTop = Math.max(0, (r.height || mainContent.clientHeight) - h);
+      return { minLeft: 0, maxLeft: Math.max(0, r.width - w), maxTop };
     }
-    function applyPanelPosition(leftPx, bottomPx) {
+    function applyPanelPosition(leftPx, topPx) {
       const b = getPanelBounds();
       if (leftPx != null) bottomPanel.style.left = Math.round(Math.max(0, Math.min(b.maxLeft, leftPx))) + 'px';
-      if (bottomPx != null) bottomPanel.style.bottom = Math.round(Math.max(0, Math.min(b.maxBottom, bottomPx))) + 'px';
+      if (topPx != null) {
+        bottomPanel.style.top = Math.round(Math.max(0, Math.min(b.maxTop, topPx))) + 'px';
+        bottomPanel.style.removeProperty('bottom');
+      }
     }
     function savePanelPosition() {
       const left = parseInt(bottomPanel.style.left, 10);
-      const bottom = parseInt(bottomPanel.style.bottom, 10);
+      const top = parseInt(bottomPanel.style.top, 10);
       try {
         if (!isNaN(left)) localStorage.setItem(PANEL_POSITION_LEFT_KEY, String(left));
-        if (!isNaN(bottom)) localStorage.setItem(PANEL_POSITION_BOTTOM_KEY, String(bottom));
+        if (!isNaN(top)) localStorage.setItem(PANEL_POSITION_TOP_KEY, String(top));
       } catch (_) {}
     }
     const savedLeft = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_LEFT_KEY), 10); } catch (_) { return null; } })();
-    const savedBottom = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_BOTTOM_KEY), 10); } catch (_) { return null; } })();
-    applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedBottom === 'number' && !isNaN(savedBottom) ? savedBottom : 0);
+    const savedTop = (() => { try { return parseInt(localStorage.getItem(PANEL_POSITION_TOP_KEY), 10); } catch (_) { return null; } })();
+    applyPanelPosition(typeof savedLeft === 'number' && !isNaN(savedLeft) ? savedLeft : 0, typeof savedTop === 'number' && !isNaN(savedTop) ? savedTop : 0);
     
     addClickOrTouchListener(panelToggleBtn, (e) => {
       e.stopPropagation();
       bottomPanel.classList.toggle('collapsed');
       panelToggleBtn.title = bottomPanel.classList.contains('collapsed') ? 'パネルを開く' : 'パネルを閉じる';
-      setTimeout(adjustWorkspaceSize, 280);
+      setTimeout(adjustWorkspaceSize, 400);
     });
     
     // パネルをドラッグで移動（タブバー・余白・コンテンツの空き領域から可。ボタン・入力・色選択等は除く）
@@ -1989,16 +1995,16 @@
       const startX = e.clientX;
       const startY = e.clientY;
       const startLeft = parseInt(bottomPanel.style.left, 10) || 0;
-      const startBottom = parseInt(bottomPanel.style.bottom, 10) || 0;
-      const { maxLeft, maxBottom } = getPanelBounds();
+      const startTop = parseInt(bottomPanel.style.top, 10) || 0;
+      const { maxLeft, maxTop } = getPanelBounds();
       let draggedEnoughToConsumeClick = false;
       function move(ev) {
         const dx = ev.clientX - startX;
-        const dy = startY - ev.clientY;
+        const dy = ev.clientY - startY;
         if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) draggedEnoughToConsumeClick = true;
         const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
-        const newBottom = Math.max(0, Math.min(maxBottom, startBottom + dy));
-        applyPanelPosition(newLeft, newBottom);
+        const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
+        applyPanelPosition(newLeft, newTop);
       }
       function stop() {
         document.removeEventListener('mousemove', move);
@@ -2025,15 +2031,15 @@
       const startX = e.touches[0].clientX;
       const startY = e.touches[0].clientY;
       const startLeft = parseInt(bottomPanel.style.left, 10) || 0;
-      const startBottom = parseInt(bottomPanel.style.bottom, 10) || 0;
-      const { maxLeft, maxBottom } = getPanelBounds();
+      const startTop = parseInt(bottomPanel.style.top, 10) || 0;
+      const { maxLeft, maxTop } = getPanelBounds();
       function move(ev) {
         if (ev.touches.length !== 1) return;
         const dx = ev.touches[0].clientX - startX;
-        const dy = startY - ev.touches[0].clientY;
+        const dy = ev.touches[0].clientY - startY;
         const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
-        const newBottom = Math.max(0, Math.min(maxBottom, startBottom + dy));
-        applyPanelPosition(newLeft, newBottom);
+        const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
+        applyPanelPosition(newLeft, newTop);
       }
       function stop() {
         document.removeEventListener('touchmove', move);
